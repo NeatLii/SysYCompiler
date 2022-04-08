@@ -3,6 +3,6 @@ add_subdirectory(ir)
 add_subdirectory(opt)
 add_subdirectory(backend)
 
-add_executable(sysy
-    sysy.cc
+add_executable(sysycc
+    sysycc.cc
 )
