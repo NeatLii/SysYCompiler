@@ -61,7 +61,7 @@ enum Layout {
     kStrike
 };
 
-std::string Format(const std::string &s,
+std::string Format(const std::string &text,
                    ForegroundColor fg_color,
                    BackgroundColor bg_color,
                    std::initializer_list<Layout> layouts);

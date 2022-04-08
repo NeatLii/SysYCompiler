@@ -4,8 +4,9 @@
 
 %{
 
-#include "sysy_verify.tab.h"
 #include <iostream>
+
+#include "sysy_verify.tab.h"
 
 int yycolumnno = 1;
 #define YY_USER_ACTION                               \

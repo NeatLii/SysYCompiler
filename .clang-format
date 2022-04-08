@@ -1,5 +1,5 @@
 # 官方文档：https://clang.llvm.org/docs/ClangFormatStyleOptions.html
-# clang-format版本：14
+# clang-format版本：>= 14
 
 # 要应用到的语言: None, Cpp, CSharp, Java, JavaScript, ObjC, Proto, TableGen, TextProto
 Language: Cpp

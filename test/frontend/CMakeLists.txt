@@ -13,7 +13,7 @@ FLEX_TARGET(SysYLexerVerify
     ${CMAKE_CURRENT_BINARY_DIR}/sysy_verify.lex.cc
 )
 ADD_FLEX_BISON_DEPENDENCY(SysYLexerVerify SysYParserVerify)
-add_library(parser_verify_lib SHARED
+add_library(parser_verify SHARED
     ${BISON_SysYParserVerify_OUTPUTS}
     ${FLEX_SysYLexerVerify_OUTPUTS}
 )
@@ -24,6 +24,6 @@ add_executable(parser_verify_tool
     parser_verify_tool.cc
 )
 target_link_libraries(parser_verify_tool
-    parser_verify_lib
+    parser_verify
     utils
 )

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_C_COMPILER clang-12)
+set(CMAKE_C_COMPILER clang-14)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_COMPILER clang++-12)
+set(CMAKE_CXX_COMPILER clang++-14)
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-O2 -Wall -Werror)
 
@@ -21,3 +21,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include_directories(include)
 add_subdirectory(src)
 add_subdirectory(test)
+add_subdirectory(lib)

@@ -12,11 +12,11 @@ int main(int argc, char **argv) {
         std::cout << "need filename" << std::endl;
         return 1;
     }
-    FILE *f = fopen(argv[1], "r");
-    if (f == nullptr) {
+    FILE *src = fopen(argv[1], "r");
+    if (src == nullptr) {
         std::cout << "open file '" << argv[1] << "' failed" << std::endl;
         return 1;
     }
-    yyin = f;
+    yyin = src;
     return yyparse();
 }

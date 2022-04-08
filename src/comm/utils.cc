@@ -5,7 +5,7 @@
 
 #include "errors.h"
 
-std::string shell::Format(const std::string &s,
+std::string shell::Format(const std::string &text,
                           ForegroundColor fg_color,
                           BackgroundColor bg_color,
                           std::initializer_list<Layout> layouts) {
@@ -16,9 +16,9 @@ std::string shell::Format(const std::string &s,
             || (kFGBrightBlack <= fg_color && fg_color <= kFGBrightWhite)) {
             prefix += std::to_string(fg_color);
         } else {
-            throw InvalidParameterValueException(
-                __FILE__, __LINE__, __FUNCTION__, "ForegroundColor fg_color",
-                std::to_string(fg_color));
+            throw InvalidParameterValueException(__FILE__, __LINE__, "Format",
+                                                 "ForegroundColor fg_color",
+                                                 std::to_string(fg_color));
         }
     }
     if (bg_color != kBGDefault) {
@@ -26,22 +26,22 @@ std::string shell::Format(const std::string &s,
             || (kBGBrightBlack <= bg_color && bg_color <= kBGBrightWhite)) {
             prefix += ';' + std::to_string(bg_color);
         } else {
-            throw InvalidParameterValueException(
-                __FILE__, __LINE__, __FUNCTION__, "BackgroundColor bg_color",
-                std::to_string(bg_color));
+            throw InvalidParameterValueException(__FILE__, __LINE__, "Format",
+                                                 "BackgroundColor bg_color",
+                                                 std::to_string(bg_color));
         }
     }
-    for (Layout l : layouts) {
-        if (kDefault <= l && l <= kStrike) {
-            prefix += ';' + std::to_string(l);
+    for (Layout layout : layouts) {
+        if (kDefault <= layout && layout <= kStrike) {
+            prefix += ';' + std::to_string(layout);
         } else {
-            throw InvalidParameterValueException(__FILE__, __LINE__,
-                                                 __FUNCTION__, "Layout layout",
-                                                 std::to_string(l));
+            throw InvalidParameterValueException(__FILE__, __LINE__, "Format",
+                                                 "Layout layout",
+                                                 std::to_string(layout));
         }
     }
     prefix += 'm';
-    return prefix + s + suffix;
+    return prefix + text + suffix;
 }
 
 #ifdef SHOW_ALL_FORMAT

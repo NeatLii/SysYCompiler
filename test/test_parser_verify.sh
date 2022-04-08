@@ -25,7 +25,11 @@ then
     exit 1
 fi
 
-TEMP="./temp/info"
+if [ ! -d "./tmp" ];
+then
+    mkdir "./tmp"
+fi
+TEMP="./tmp/info"
 TEMP=$(realpath ${TEMP})
 
 for x in $(ls $dirPath | grep -e ".sy$");
@@ -40,3 +44,5 @@ do
         exit 1
     fi
 done
+
+echo -e "\e[32;1m[SUCCESS]\e[0m"

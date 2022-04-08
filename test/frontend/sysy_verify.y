@@ -13,7 +13,7 @@ extern int yylex();
 struct YYLTYPE;
 
 std::string locationDump(YYLTYPE location);
-void reduce(std::string nonterminal, std::initializer_list<std::string> list);
+void reduce(const std::string &nonterminal, std::initializer_list<std::string> list);
 void yyerror(const char *format, ...);
 void yylerror(YYLTYPE location, const char *format, ...);
 
@@ -214,10 +214,11 @@ std::string locationDump(YYLTYPE location) {
     return result.str();
 }
 
-void reduce(std::string nonterminal, std::initializer_list<std::string> list) {
+void reduce(const std::string &nonterminal,
+            std::initializer_list<std::string> list) {
     std::cout << nonterminal
               << shell::Format(" <---", shell::kFGGreen, shell::kBGDefault, {});
-    for (const auto &s : list) { std::cout << ' ' << s; }
+    for (const auto &token : list) { std::cout << ' ' << token; }
     std::cout << std::endl;
 }
 
@@ -227,7 +228,7 @@ void yyerror(const char *format, ...) {
 
     std::cout << shell::Format("[ERROR] ", shell::kFGBrightRed,
                                shell::kBGDefault, {shell::kBold});
-    vfprintf(stderr, format, args);
+    (void)vfprintf(stderr, format, args);
     std::cout << std::endl;
 
     va_end(args);
@@ -239,7 +240,7 @@ void yylerror(YYLTYPE location, const char *format, ...) {
 
     std::cout << shell::Format("[ERROR] ", shell::kFGBrightRed,
                                shell::kBGDefault, {shell::kBold});
-    vfprintf(stderr, format, args);
+    (void)vfprintf(stderr, format, args);
     std::cout << ' '
               << shell::Format(locationDump(location), shell::kFGYellow,
                                shell::kBGDefault, {})
