@@ -1,0 +1,9 @@
+a = (1 + 1);
+b = a;
+int c[10][10][10];
+cc = c[5][1][2];
+d = +-!1;
+
+int func(int a, int b[], int c[][3][4]);
+int e[4];
+ee = func(a, e[3], c[1][2][3]);

@@ -1,4 +1,4 @@
-# flex and bison lib build
+# flex and bison verify lib
 
 find_package(BISON)
 find_package(FLEX)
@@ -25,5 +25,5 @@ add_executable(parser_verify_tool
 )
 target_link_libraries(parser_verify_tool
     parser_verify
-    utils
+    util
 )

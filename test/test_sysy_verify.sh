@@ -1,4 +1,5 @@
 #!/bin/bash
+# test if flex and bison can recognize all testcase
 
 if [ $# -ne 1 ];
 then

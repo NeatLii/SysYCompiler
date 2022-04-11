@@ -19,7 +19,7 @@ int yycolumnno = 1;
 
 // include the definition of YYTOKENTYPE
 // include the definition of YYSTYPE
-#include "sysy_verify.tab.h"
+#include "sysy.tab.h"
 
 extern void yyerror(const char *format, ...);
 extern void yylerror(YYLTYPE location, const char *format, ...);

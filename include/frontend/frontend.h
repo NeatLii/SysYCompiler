@@ -1,17 +1,14 @@
 #ifndef __frontend_h__
 #define __frontend_h__
 
+#include "frontend/parser.h"
+
 class Frontend {
-    // std::vector<Token> token_table
+    parser::SourceManager src_manager;
 
     // TranslationUnit trans_unit
 
     // Module m
-};
-
-class TranslationUnit {
-    // std::unordered_map<std::string, ast::Decl> ident_table
-    // std::vector<ast::Decl> decls
 };
 
 #endif

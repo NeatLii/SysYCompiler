@@ -1,14 +1,17 @@
-#include "utils.h"
+#include "util.h"
 
+#include <iomanip>
+#include <ios>
 #include <iostream>
+#include <sstream>
 #include <string>
 
-#include "errors.h"
+#include "error.h"
 
-std::string shell::Format(const std::string &text,
-                          ForegroundColor fg_color,
-                          BackgroundColor bg_color,
-                          std::initializer_list<Layout> layouts) {
+std::string util::FormatTerminal(const std::string &text,
+                                 ForegroundColor fg_color,
+                                 BackgroundColor bg_color,
+                                 std::initializer_list<Layout> layouts) {
     std::string prefix = "\e[";
     std::string suffix = "\e[0m";
     if (fg_color != kFGDefault) {
@@ -45,26 +48,42 @@ std::string shell::Format(const std::string &text,
 }
 
 #ifdef SHOW_ALL_FORMAT
-void shell::ShowAllFormat() {
+void util::ShowAllFormat() {
     for (int i = kFGBlack; i <= kFGWhite; ++i) {
-        std::cout << Format("text", (ForegroundColor)i, kBGDefault, {}) << ' ';
+        std::cout << FormatTerminal("text", static_cast<ForegroundColor>(i),
+                                    kBGDefault, {})
+                  << ' ';
     }
     std::cout << std::endl;
     for (int i = kFGBrightBlack; i <= kFGBrightWhite; ++i) {
-        std::cout << Format("text", (ForegroundColor)i, kBGDefault, {}) << ' ';
+        std::cout << FormatTerminal("text", static_cast<ForegroundColor>(i),
+                                    kBGDefault, {})
+                  << ' ';
     }
     std::cout << std::endl;
     for (int i = kBGBlack; i <= kBGWhite; ++i) {
-        std::cout << Format("text", kFGDefault, (BackgroundColor)i, {}) << ' ';
+        std::cout << FormatTerminal("text", kFGDefault,
+                                    static_cast<BackgroundColor>(i), {})
+                  << ' ';
     }
     std::cout << std::endl;
     for (int i = kBGBrightBlack; i <= kBGBrightWhite; ++i) {
-        std::cout << Format("text", kFGDefault, (BackgroundColor)i, {}) << ' ';
+        std::cout << FormatTerminal("text", kFGDefault,
+                                    static_cast<BackgroundColor>(i), {})
+                  << ' ';
     }
     std::cout << std::endl;
     for (int i = kDefault; i <= kStrike; ++i) {
-        std::cout << Format("text", kFGDefault, kBGDefault, {(Layout)i}) << ' ';
+        std::cout << FormatTerminal("text", kFGDefault, kBGDefault, {(Layout)i})
+                  << ' ';
     }
     std::cout << std::endl;
 }
 #endif
+
+std::string util::FormatHex32(std::uint32_t num) {
+    std::stringstream buf;
+    buf << std::setw(sizeof(num) * 2) << std::setfill('0');
+    buf << std::hex << num;
+    return "0x" + buf.str();
+}

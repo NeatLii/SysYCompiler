@@ -1,12 +1,13 @@
 #ifndef __utils_h__
 #define __utils_h__
 
+#include <cstdint>
 #include <initializer_list>
 #include <string>
 
-/* Reference: https://en.wikipedia.org/wiki/ANSI_escape_code */
+namespace util {
 
-namespace shell {
+// Reference: https://en.wikipedia.org/wiki/ANSI_escape_code
 
 enum ForegroundColor {
     kFGDefault = 0,
@@ -14,7 +15,7 @@ enum ForegroundColor {
     kFGRed,
     kFGGreen,
     kFGYellow,
-    KFGBlue,
+    kFGBlue,
     kFGMagenta,
     kFGCyan,
     kFGWhite,
@@ -22,7 +23,7 @@ enum ForegroundColor {
     kFGBrightRed,
     kFGBrightGreen,
     kFGBrightYellow,
-    KFGBrightBlue,
+    kFGBrightBlue,
     kFGBrightMagenta,
     kFGBrightCyan,
     kFGBrightWhite
@@ -34,7 +35,7 @@ enum BackgroundColor {
     kBGRed,
     kBGGreen,
     kBGYellow,
-    KBGBlue,
+    kBGBlue,
     kBGMagenta,
     kBGCyan,
     kBGWhite,
@@ -42,7 +43,7 @@ enum BackgroundColor {
     kBGBrightRed,
     kBGBrightGreen,
     kBGBrightYellow,
-    KBGBrightBlue,
+    kBGBrightBlue,
     kBGBrightMagenta,
     kBGBrightCyan,
     kBGBrightWhite
@@ -61,15 +62,18 @@ enum Layout {
     kStrike
 };
 
-std::string Format(const std::string &text,
-                   ForegroundColor fg_color,
-                   BackgroundColor bg_color,
-                   std::initializer_list<Layout> layouts);
+// colorful terminal output
+std::string FormatTerminal(const std::string &text,
+                           ForegroundColor fg_color,
+                           BackgroundColor bg_color,
+                           std::initializer_list<Layout> layouts);
 
 #ifdef SHOW_ALL_FORMAT
 void ShowAllFormat();
 #endif
 
-}  // namespace shell
+std::string FormatHex32(std::uint32_t num);
+
+}  // namespace util
 
 #endif

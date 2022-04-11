@@ -1,0 +1,7 @@
+int getint(), getch(), getarray(int a[]);
+void putint(int a), putch(int a), putarray(int n, int a[]);
+
+void _sysy_starttime(int lineno);
+void _sysy_stoptime(int lineno);
+
+void func(int a[][3], int b[][3][4]) { getint(); }

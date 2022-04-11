@@ -1,1 +1,1 @@
-add_library(utils SHARED utils.cc)
+add_library(util SHARED util.cc)
