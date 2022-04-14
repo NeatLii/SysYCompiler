@@ -2,10 +2,10 @@
 
 #include <iostream>
 
-extern FILE *yyin;
-extern int yyparse();
+#include "frontend/frontend.h"
 
-/* print reduce steps of parser */
+ast::SourceManager src_manager;
+ast::ASTManager ast_manager(src_manager);
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -17,6 +17,12 @@ int main(int argc, char **argv) {
         std::cout << "open file '" << argv[1] << "' failed" << std::endl;
         return 1;
     }
+
+    src_manager.SetFileName(argv[1]);
     yyin = src;
-    return yyparse();
+    int result = yyparse();
+
+    src_manager.Dump(std::cout);
+    ast_manager.Dump(std::cout);
+    return result;
 }

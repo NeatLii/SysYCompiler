@@ -13,15 +13,10 @@ struct Token {
     SourceRange range;
 };
 
-// used to count identifier scope
-struct IdentToken : public Token {
-    int indent;
-};
-
 // index in token table
 using TokenLocation = std::vector<Token>::size_type;
 
-class SourceMageger{
+class SourceMageger {
     std::string file_name;
 	std::vector<Token> token_table;
 }
@@ -31,134 +26,245 @@ class SourceMageger{
 
 # AST Manager
 
-保存符号表、所有 AST 结点及其上下文。
+保存所有 AST 结点。
 
 ```c++
-class ASTNode {
-    std::unique_ptr<Decl> decl;
-    std::unique_ptr<Stmt> stmt;
-}
-
 // index in ASTNode table
 using ASTLocation = std::vector<ASTNode>::size_type;
-// range in token table
-using TokenRange = struct {
-    const TokenLocation begin;
-    const TokenLocation end;
-};
 
-class ASTManager{
-	const SourceManager &src;
-    std::vector<TokenLocation> ident_table;
-    std::unordered_map<std::string, TokenLocation> global_ident_table;
-    std::vector<ASTNode> ASTNode_table;
-    std::unordered_map<ASTLocation, TokenRange> ASTNode_context;
+class ASTManager {
+	SourceManager &raw;
+    std::vector<std::unique_ptr<ASTNode>> node_table;
+    bool has_root;
+    ASTLocation root;
 }
 ```
 
 
 
-# AST
-
-## Type
+# Ident Table
 
 ```c++
-// basic types
-enum Type { kUndef, kVoid, kInt };
+class IdentTable {
+    std::unordered_map<std::string, ASTLocation> ident_table;
+}
+```
+
+
+
+# ASTNode (virtual)
+
+```c++
+class ASTNode : public IdentTable {
+    enum ASTNodeKind {};
+    ASTNodeKind kind;
+    
+    ASTManager &src;
+    SourceRange range;
+
+    bool has_loc;
+    ASTLocation loc;
+    bool has_parent;
+    ASTLocation parent;
+}
+```
+
+
+
+## TranslationUnit
+
+```c++
+class TranslationUnit final : public ASTNode {
+    std::vector<ASTLocation> decl_list;
+}
 ```
 
 
 
 ## Decl (virtual)
 
-- `SourceManager &src`
-- `SourceLocation ident`：指向 `token_table` 中存放标识符的位置
-- `Type type`
-- `ASTManager &def`
+```c++
+class Decl : public ASTNode {
+    enum Type { kUndef, kVoid, kInt };
+    Type type;
+    TokenLocation ident;
+}
+```
 
 ### VarDecl
 
-- `bool const_decl`
-- `std::vector<int> array_dim`
-- `ASTLocation init_expr`：`Expr` 类型
-
-### FunctionDecl
-
-- `std::vector<ASTLocation> params`：`ParamVarDecl` 类型
-- `ASTLocation body`：`CompoundStmt` 类型
+```c++
+class VarDecl final : public Decl {
+    bool has_init;
+    ASTLocation init;	// Expr
+    
+    std::vector<ASTLocation> arr_dim_list;	// Expr
+    bool is_const;
+}
+```
 
 ### ParamVarDecl
 
-- `bool ptr_decl`
-- `std::vector<int> array_dim`
+```c++
+class ParamVarDecl final : public Decl {
+    bool is_ptr;
+    std::vector<ASTLocation> arr_dim_list;	
+}
+```
+
+### FunctionDecl
+
+```c++
+class FunctionDecl final : public Decl {
+    std::vector<ASTLocation> param_list;	// ParamVarDecl
+    bool has_def;
+    ASTLocation def;						// CompoundStmt
+}
+```
 
 
 
 ## Stmt (virtual)
 
-- `ASTManager &def`
+```c++
+class Stmt : public ASTNode {}
+```
 
 ### CompoundStmt
 
-- `std::vector<ASTLocation> stmts`：`Stmt` 类型
+```c++
+class CompoundStmt final : public Stmt {
+    std::vector<ASTLocation> stmt_list;		// Stmt
+}
+```
 
 ### DeclStmt
 
-- `ASTLocation decl`：`VarDecl` 类型
+```c++
+class DeclStmt final : public Stmt {
+    ASTLocation decl;		// VarDecl
+}
+```
 
 ### NullStmt
 
+```c++
+class NullStmt final : public Stmt {}
+```
+
 ### IfStmt
 
-- `ASTLocation cond`：`Expr` 类型
-- `ASTLocation if_true`：`Stmt` 类型
-- `ASTLocation if_false`：`Stmt` 类型
+```c++
+class IfStmt final : public Stmt {
+    ASTLocation cond;			// Expr
+    ASTLocation if_true;		// Stmt
+    bool has_else;
+    ASTLocation if_false;		// Stmt
+}
+```
 
 ### WhileStmt
 
-- `ASTLocation cond`：`Expr` 类型
-- `ASTLocation body`：`Stmt` 类型
+```c++
+class WhileStmt final : public Stmt {
+    ASTLocation cond;		// Expr
+    ASTLocation body;		// Stmt
+}
+```
 
 ### ContinueStmt
 
+```c++
+class ContinueStmt final : public Stmt {}
+```
+
 ### BreakStmt
+
+```c++
+class BreakStmt final : public Stmt {}
+```
 
 ### ReturnStmt
 
-- `ASTLocation expr`：`Expr` 类型
+```c++
+class ReturnStmt final : public Stmt {
+    ASTLocation expr;		// Expr
+}
+```
 
 ### Expr (virtual)
 
+```c++
+class Expr : public Stmt {
+    bool is_const;
+    int value;
+}
+```
+
 ##### IntegerLiteral
 
-- `int value`
+```c++
+class IntegerLiteral final : public Expr {}
+```
 
 ##### ParenExpr
 
-- `ASTLocation expr`：`Expr` 类型
+```c++
+class ParenExpr final : public Expr {
+    ASTLocation sub_expr;	// Expr
+}
+```
 
 ##### DeclRefExpr
 
-- `TokenLocation ref`：指向 `token_table` 中存放标识符的位置
-- `std::vector<int> array_dim`
+```c++
+class DeclRefExpr final : public Expr {
+    TokenLocation ident;
+    std::vector<ASTLocation> arr_dim_list;	// Expr
 
-##### BinaryOperator
-
-- `enmu BinaryOpKind { kAdd, kSub, kMul, kDiv, kRem, kOr, kAnd, kEQ, kNE, kLT, kLE, kGT, kGE }`
-- `BinaryOpKind op`
-- `ASTLocation LHS, RHS`：`Expr` 类型
-
-##### UnaryOperator
-
-- `enmu UnaryOpKind { kPlus, kMinus, kNot }`
-- `ASTLocation sub_expr`：`Expr` 类型
+    bool has_ref;
+    ASTLocation ref;						// Decl
+}
+```
 
 ##### CallExpr
 
-- `TokenLocation func`：指向 `token_table` 中存放标识符的位置
-- `std::vector<ASTLocation> params`：`DeclRefExpr` 类型
+```c++
+class CallExpr final : public Expr {
+    TokenLocation ident;
+    std::vector<ASTLocation> param_list;	// Expr
 
-##### ConstExpr
+    bool has_ref;
+    ASTLocation ref;						// FunctionDecl
+}
+```
 
-- `int value`
-- `ASTLocation expr`：`Expr` 类型
+##### BinaryOperator
+
+```c++
+class BinaryOperator final : public Expr {
+    enum BinaryOpKind {};
+    BinaryOpKind op_code;
+    ASTLocation LHS;		// Expr
+    ASTLocation RHS;		// Expr
+}
+```
+
+##### UnaryOperator
+
+```c++
+class UnaryOperator final : public Expr {
+    enum UnaryOpKind {};
+    UnaryOpKind op_code;
+    ASTLocation sub_expr;	// Expr
+}
+```
+
+##### InitListExpr
+
+```c++
+class InitListExpr final : public Expr {
+    std::vector<ASTLocation> init_list;		// Expr
+}
+```
+

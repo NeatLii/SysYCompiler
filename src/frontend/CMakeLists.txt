@@ -18,6 +18,14 @@ add_library(parser SHARED
 )
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+# ast lib
+
+add_library(ast SHARED
+    source_manager.cc
+    ast_manager.cc
+)
+target_link_libraries(parser ast)
+
 # parser tool
 
 add_executable(parser_tool
@@ -27,12 +35,3 @@ target_link_libraries(parser_tool
     parser
     util
 )
-
-# frontend lib
-
-add_library(frontend
-    source_manager.cc
-    ast_manager.cc
-    ast.cc
-)
-target_link_libraries(frontend parser)

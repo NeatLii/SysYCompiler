@@ -1,25 +1,33 @@
 %option noyywrap nounput noinput
 %option nodefault
-%option yylineno
 
 %{
 
-// include the definition of YYLTYPE
-#include "frontend/source_manager.h"
+#include <stdlib.h>
+
+/* Include the definition of YYLTYPE, import SourceManager. */
+#include "frontend/frontend.h"
+
+/* Location type.  */
 using YYLTYPE = ast::SourceRange;
 #define YYLTYPE_IS_DECLARED 1
 
-// manage column counts
-int yycolumnno = 1;
-#define YY_USER_ACTION                              \
-    yylloc.begin_line = yylloc.end_line = yylineno; \
-    yylloc.begin_column = yycolumnno;               \
-    yylloc.end_column = yycolumnno + yyleng - 1;    \
-    yycolumnno += yyleng;
-
-// include the definition of YYTOKENTYPE
-// include the definition of YYSTYPE
+/* Include the definitions of YYTOKENTYPE and YYSTYPE. */
 #include "sysy.tab.h"
+
+int yyline_no = 1;
+int yycolumn_no = 1;
+void newline();
+
+/* Maintain counts of line and column numbers, and automatically add tokens
+ * to token table.
+ */
+#define YY_USER_ACTION                               \
+    yylloc.begin_line = yylloc.end_line = yyline_no; \
+    yylloc.begin_column = yycolumn_no;               \
+    yylloc.end_column = yycolumn_no + yyleng - 1;    \
+    yycolumn_no += yyleng;                           \
+    yylval.token = src_manager.AddToken(yytext, yylloc);
 
 extern void yyerror(const char *format, ...);
 extern void yylerror(YYLTYPE location, const char *format, ...);
@@ -30,11 +38,13 @@ extern void yylerror(YYLTYPE location, const char *format, ...);
 
 %%
 
-"/*"                { BEGIN(COMMENT); }
-<COMMENT>"*/"       { BEGIN(INITIAL); }
-<COMMENT>\n         { yycolumnno = 1; }
-<COMMENT>[^*]+|.    ;
-"//".*\n            { yycolumnno = 1; }
+"/*"                    { BEGIN(COMMENT); }
+<COMMENT>[^*\n]*        ;
+<COMMENT>\n             { newline(); }
+<COMMENT>[*]+[^/\n]*    ;
+<COMMENT>[*]+[/]        { BEGIN(INITIAL); }
+
+"//".*\n            { newline(); }
 
 "const"     { return CONST; }
 "void"      { return VOID; }
@@ -48,9 +58,9 @@ extern void yylerror(YYLTYPE location, const char *format, ...);
 "return"    { return RETURN; }
 
 [a-zA-Z_][a-zA-Z0-9_]*      { return IDENT; }
-0[0-7]*                     { return NUMBER; }
-[1-9][0-9]*                 { return NUMBER; }
-0[xX][0-9a-fA-F]+           { return NUMBER; }
+0[0-7]*                     { yylval.integer = (int)strtol(yytext, nullptr, 8); return NUMBER; }
+[1-9][0-9]*                 { yylval.integer = atoi(yytext); return NUMBER; }
+0[xX][0-9a-fA-F]+           { yylval.integer = (int)strtol(yytext, nullptr, 16); return NUMBER; }
 
 "||"                        { return OR; }
 "&&"                        { return AND; }
@@ -60,8 +70,13 @@ extern void yylerror(YYLTYPE location, const char *format, ...);
 ">="                        { return GE; }
 [,;=+\-*/%!<>()[\]{}]       { return *yytext; }
 
-\n              { yycolumnno = 1; }
-[ \t\r]         ;
-.               { yylerror(yylloc, "Lexer: unknown input %s", yytext); }
+\n              { newline(); }
+[ \t\r]+        ;
+.               { yylerror(yylloc, "Lexer: unknown input '%s'", yytext); }
 
 %%
+
+void newline() {
+    ++yyline_no;
+    yycolumn_no = 1;
+}

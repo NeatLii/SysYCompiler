@@ -8,10 +8,12 @@
 
 #include "error.h"
 
-std::string util::FormatTerminal(const std::string &text,
-                                 ForegroundColor fg_color,
-                                 BackgroundColor bg_color,
-                                 std::initializer_list<Layout> layouts) {
+namespace util {
+
+std::string FormatTerminal(const std::string &text,
+                           ForegroundColor fg_color,
+                           BackgroundColor bg_color,
+                           std::initializer_list<Layout> layouts) {
     std::string prefix = "\e[";
     std::string suffix = "\e[0m";
     if (fg_color != kFGDefault) {
@@ -47,8 +49,14 @@ std::string util::FormatTerminal(const std::string &text,
     return prefix + text + suffix;
 }
 
+std::string FormatTerminalBold(const std::string &text,
+                               ForegroundColor fg_color,
+                               BackgroundColor bg_color) {
+    return FormatTerminal(text, fg_color, bg_color, {kBold});
+}
+
 #ifdef SHOW_ALL_FORMAT
-void util::ShowAllFormat() {
+void howAllFormat() {
     for (int i = kFGBlack; i <= kFGWhite; ++i) {
         std::cout << FormatTerminal("text", static_cast<ForegroundColor>(i),
                                     kBGDefault, {})
@@ -81,9 +89,11 @@ void util::ShowAllFormat() {
 }
 #endif
 
-std::string util::FormatHex32(std::uint32_t num) {
+std::string FormatHex32(std::uint32_t num) {
     std::stringstream buf;
     buf << std::setw(sizeof(num) * 2) << std::setfill('0');
     buf << std::hex << num;
     return "0x" + buf.str();
 }
+
+}  // namespace util

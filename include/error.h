@@ -47,4 +47,18 @@ class IdentRefNotFindException : public std::runtime_error {
         , ident(ident) {}
 };
 
+class InvalidOperatorException : public std::runtime_error {
+  public:
+    const std::string expr;
+    explicit InvalidOperatorException(const std::string &expr)
+        : std::runtime_error('\n' + expr), expr(expr) {}
+};
+
+class NotConstExprException : public std::runtime_error {
+  public:
+    const std::string expr;
+    explicit NotConstExprException(const std::string &expr)
+        : std::runtime_error('\n' + expr), expr(expr) {}
+};
+
 #endif

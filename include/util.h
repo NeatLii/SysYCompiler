@@ -62,11 +62,17 @@ enum Layout {
     kStrike
 };
 
-// colorful terminal output
+/* colorful terminal output */
+
 std::string FormatTerminal(const std::string &text,
                            ForegroundColor fg_color,
-                           BackgroundColor bg_color,
-                           std::initializer_list<Layout> layouts);
+                           BackgroundColor bg_color = kBGDefault,
+                           std::initializer_list<Layout> layouts = {});
+
+// BackgroundColor default, Layout bold
+std::string FormatTerminalBold(const std::string &text,
+                               ForegroundColor fg_color,
+                               BackgroundColor bg_color = kBGDefault);
 
 #ifdef SHOW_ALL_FORMAT
 void ShowAllFormat();

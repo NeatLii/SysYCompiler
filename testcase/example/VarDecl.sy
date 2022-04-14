@@ -9,3 +9,6 @@ int f[3][2] = {
     {--a    },
     {c[3], func()      }
 };
+
+const int len = 10;
+int arr[len * 2];

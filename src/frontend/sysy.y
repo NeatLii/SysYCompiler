@@ -7,11 +7,14 @@
 #include <sstream>
 #include <string>
 
-// include the definition of YYLTYPE
-#define AST_SOURCE_RANGE_ONLY
-#include "frontend/source_manager.h"
+/* Include the definition of YYLTYPE, import SourceManager and ASTManager. */
+#include "frontend/frontend.h"
+
+/* Location type.  */
 using YYLTYPE = ast::SourceRange;
 #define YYLTYPE_IS_DECLARED 1
+
+/* Maintain ASTNode's token range. */
 #define YYLLOC_DEFAULT(Current, Rhs, N)                             \
     do                                                              \
         if (N) {                                                    \
@@ -29,11 +32,6 @@ using YYLTYPE = ast::SourceRange;
 
 #include "util.h"
 
-extern int yylex();
-
-std::string locationDump(YYLTYPE location);
-void reduce(const std::string &nonterminal,
-            std::initializer_list<std::string> list);
 void yyerror(const char *format, ...);
 void yylerror(YYLTYPE location, const char *format, ...);
 
@@ -42,26 +40,61 @@ void yylerror(YYLTYPE location, const char *format, ...);
 %glr-parser
 %locations
 
-%token CONST "const"
-%token VOID "void"
-%token INT "int"
+%union{
+    ast::TokenLocation token;
+    ast::ASTLocation ast;
+    std::vector<ast::ASTLocation> *node_list;
+    bool b;
+    int integer;
+}
 
-%token IF "if"
-%token ELSE "else"
-%token WHILE "while"
-%token BREAK "break"
-%token CONTINUE "continue"
-%token RETURN "return"
+%token <token> CONST "const"
+%token <token> VOID "void"
+%token <token> INT "int"
 
-%token IDENT
-%token NUMBER
+%token <token> IF "if"
+%token <token> ELSE "else"
+%token <token> WHILE "while"
+%token <token> BREAK "break"
+%token <token> CONTINUE "continue"
+%token <token> RETURN "return"
 
-%token OR "||"
-%token AND "&&"
-%token EQ "=="
-%token NE "!="
-%token LE "<="
-%token GE ">="
+%token <token> IDENT
+%token <integer> NUMBER
+
+%token <token> OR "||"
+%token <token> AND "&&"
+%token <token> EQ "=="
+%token <token> NE "!="
+%token <token> LE "<="
+%token <token> GE ">="
+
+%type <ast> CompUnit
+
+%type <node_list> Decl
+%type <token> BType
+%type <node_list> ConstDefList VarDefList
+%type <ast> ConstDef VarDef
+
+%type <node_list> ArrayDimension
+%type <ast> ConstArrayInit ArrayInit
+%type <node_list> ConstInitList InitList
+%type <ast> ConstInitItem InitItem
+
+%type <ast> FuncDef
+%type <b> FuncType
+%type <node_list> FuncFParamList
+%type <ast> FuncFParam
+
+%type <ast> Block
+%type <node_list> BlockItemList
+%type <ast> BlockItem Stmt LVal
+%type <node_list> ArrayReference
+
+%type <ast> Exp ConstExp Cond
+%type <node_list> FuncRParamList
+
+/* priority and associativity */
 
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
@@ -77,177 +110,267 @@ void yylerror(YYLTYPE location, const char *format, ...);
 
 %%
 
-CompUnit:                   { reduce("CompUnit", {"⌀"}); }
-    | CompUnit Decl         { reduce("CompUnit", {"CompUnit", "Decl"}); }
-    | CompUnit FuncDef      { reduce("CompUnit", {"CompUnit", "FuncDef"}); }
+CompUnit:                   {
+                                $$ = ast_manager.AddNode(new ast::TranslationUnit(ast_manager));
+                                ast_manager.SetRoot($$);
+                            }
+    | CompUnit Decl         {
+                                $$ = $1;
+                                ast_manager.GetRoot().SetRange(@$);
+                                for(ast::ASTLocation decl : *$2) {
+                                    ast_manager.GetDecl(decl).SetParent($$);
+                                    ast_manager.GetRoot().AddDecl(decl);
+                                }
+                            }
+    | CompUnit FuncDef      {
+                                $$ = $1;
+                                ast_manager.GetRoot().SetRange(@$);
+                                ast_manager.GetDecl($2).SetParent($$);
+                                ast_manager.GetRoot().AddDecl($2);
+                            }
     ;
 
 /* --------------- Variable Declaration and Definition --------------- */
 
-Decl: "const" BType ConstDefList ';'        { reduce("Decl", {"\"const\"", "BType", "ConstDefList", "';'"}); }
-    | BType VarDefList ';'                  { reduce("Decl", {"BType", "VarDefList", "';'"}); }
+Decl: "const" BType ConstDefList ';'    {
+                                            $$ = $3;
+                                            for(ast::ASTLocation decl : *$$)
+                                                ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
+                                        }
+    | BType VarDefList ';'              {
+                                            $$ = $2;
+                                            for(ast::ASTLocation decl : *$$)
+                                                ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
+                                        }
     ;
 
-BType: "int"        { reduce("BType", {"\"int\""}); }
+BType: "int"        { $$ = $1; }
     ;
 
-ConstDefList: ConstDef                  { reduce("ConstDefList", {"ConstDef"}); }
-    | ConstDefList ',' ConstDef         { reduce("ConstDefList", {"ConstDefList", "','", "ConstDef"}); }
+ConstDefList: ConstDef              { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | ConstDefList ',' ConstDef     { $$ = $1; $$->emplace_back($3); }
     ;
-VarDefList: VarDef                      { reduce("VarDefList", {"VarDef"}); }
-    | VarDefList ',' VarDef             { reduce("VarDefList", {"VarDefList", "','", "VarDef"}); }
-    ;
-
-ConstDef: IDENT '=' ConstExp                        { reduce("ConstDef", {"IDENT", "'='", "ConstExp"}); }
-    | IDENT ArrayDimension '=' ConstArrayInit       { reduce("ConstDef", {"IDENT", "ArrayDimension", "'='", "ConstArrayInit"}); }
-    ;
-VarDef: IDENT                                       { reduce("VarDef", {"IDENT"}); }
-    | IDENT '=' Exp                                 { reduce("VarDef", {"IDENT", "'='", "Exp"}); }
-    | IDENT ArrayDimension                          { reduce("VarDef", {"IDENT", "ArrayDimension"}); }
-    | IDENT ArrayDimension '=' ArrayInit            { reduce("VarDef", {"IDENT", "ArrayDimension", "'='", "ArrayInit"}); }
+VarDefList: VarDef                  { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | VarDefList ',' VarDef         { $$ = $1; $$->emplace_back($3); }
     ;
 
-ArrayDimension: '[' ConstExp ']'            { reduce("ArrayDimension", {"'['", "ConstExp", "']'"}); }
-    | ArrayDimension '[' ConstExp ']'       { reduce("ArrayDimension", {"ArrayDimension", "'['", "ConstExp", "']'"}); }
+ConstDef: IDENT '=' ConstExp                    { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $3, {}, true)); }
+    | IDENT ArrayDimension '=' ConstArrayInit   { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $4, *$2, true)); }
+    ;
+VarDef: IDENT                               { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1)); }
+    | IDENT '=' Exp                         { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $3, {})); }
+    | IDENT ArrayDimension                  { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, *$2)); }
+    | IDENT ArrayDimension '=' ArrayInit    { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $4, *$2)); }
     ;
 
-ConstArrayInit: '{' ConstInitList '}'       { reduce("ConstArrayInit", {"'{'", "ConstInitList", "'}'"}); }
-    ;
-ArrayInit: '{' InitList '}'                 { reduce("ArrayInit", {"'{'", "InitList", "'}'"}); }
-    ;
-
-ConstInitList:                              { reduce("ConstInitList", {"⌀"}); }
-    | ConstInitItem                         { reduce("ConstInitList", {"ConstInitItem"}); }
-    | ConstInitList ',' ConstInitItem       { reduce("ConstInitList", {"ConstInitList", "','", "ConstInitItem"}); }
-    ;
-InitList:                                   { reduce("InitList", {"⌀"}); }
-    | InitItem                              { reduce("InitList", {"InitItem"}); }
-    | InitList ',' InitItem                 { reduce("InitList", {"InitList", "','", "InitItem"}); }
+ArrayDimension: '[' ConstExp ']'        { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($2); }
+    | ArrayDimension '[' ConstExp ']'   { $$ = $1; $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($3); }
     ;
 
-ConstInitItem: ConstExp         { reduce("ConstInitItem", {"ConstExp"}); }
-    | ConstArrayInit            { reduce("ConstInitItem", {"ConstArrayInit"}); }
+ConstArrayInit: '{' ConstInitList '}'   {
+                                            $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, *$2));
+                                            for(auto expr : *$2) ast_manager.GetNode(expr).SetParent($$);
+                                        }
     ;
-InitItem: Exp                   { reduce("InitItem", {"Exp"}); }
-    | ArrayInit                 { reduce("InitItem", {"ArrayInit"}); }
+ArrayInit: '{' InitList '}'             {
+                                            $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, *$2));
+                                            for(auto expr : *$2) ast_manager.GetNode(expr).SetParent($$);
+                                        }
+    ;
+
+ConstInitList:                              { $$ = new std::vector<ast::ASTLocation>(); }
+    | ConstInitItem                         { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | ConstInitList ',' ConstInitItem       { $$ = $1; $$->emplace_back($3); }
+    ;
+InitList:                                   { $$ = new std::vector<ast::ASTLocation>(); }
+    | InitItem                              { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | InitList ',' InitItem                 { $$ = $1; $$->emplace_back($3); }
+    ;
+
+ConstInitItem: ConstExp     { $$ = $1; }
+    | ConstArrayInit        { $$ = $1; }
+    ;
+InitItem: Exp               { $$ = $1; }
+    | ArrayInit             { $$ = $1; }
     ;
 
 /* --------------- Function Definition --------------- */
 
-FuncDef: FuncType IDENT '(' FuncFParamList ')' Block        { reduce("FuncDef", {"FuncType", "IDENT", "'('", "FuncFParamList", "')'", "Block"}); }
+FuncDef: FuncType IDENT '(' FuncFParamList ')' Block    {
+                                                            $$ = ast_manager.AddNode(new ast::FunctionDecl(ast_manager, @$, $2, *$4, $6));
+                                                            ast_manager.GetDecl($$).SetType($1 ? ast::Decl::kVoid : ast::Decl::kInt);
+                                                        }
     ;
 
-FuncType: "void"        { reduce("FuncType", {"\"void\""}); }
-    | BType             { reduce("FuncType", {"BType"}); }
+FuncType: "void"        { $$ = true; }
+    | BType             { $$ = false; }
     ;
 
-FuncFParamList:                             { reduce("FuncFParamList", {"⌀"}); }
-    | FuncFParam                            { reduce("FuncFParamList", {"FuncFParam"}); }
-    | FuncFParamList ',' FuncFParam         { reduce("FuncFParamList", {"FuncFParamList", "','", "FuncFParam"}); }
+FuncFParamList:                         { $$ = new std::vector<ast::ASTLocation>(); }
+    | FuncFParam                        { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | FuncFParamList ',' FuncFParam     { $$ = $1; $$->emplace_back($3); }
     ;
 
-FuncFParam: BType IDENT                         { reduce("FuncFParam", {"BType", "IDENT"}); }
-    | BType IDENT '[' ']'                       { reduce("FuncFParam", {"BType", "IDENT", "'['", "']'"}); }
-    | BType IDENT '[' ']' ArrayDimension        { reduce("FuncFParam", {"BType", "IDENT", "'['", "']'", "ArrayDimension"}); }
+FuncFParam: BType IDENT                     {
+                                                $$ = ast_manager.AddNode(new ast::ParamVarDecl(ast_manager, @$, $2, false));
+                                                ast_manager.GetDecl($$).SetType(ast::Decl::kInt);
+                                            }
+    | BType IDENT '[' ']'                   {
+                                                $$ = ast_manager.AddNode(new ast::ParamVarDecl(ast_manager, @$, $2, true));
+                                                ast_manager.GetDecl($$).SetType(ast::Decl::kInt);
+                                            }
+    | BType IDENT '[' ']' ArrayDimension    {
+                                                $$ = ast_manager.AddNode(new ast::ParamVarDecl(ast_manager, @$, $2, true, *$5));
+                                                ast_manager.GetDecl($$).SetType(ast::Decl::kInt);
+                                            }
     ;
 
 /* --------------- Block and Statement --------------- */
 
-Block: '{' BlockItemList '}'        { reduce("Block", {"'{'", "BlockItemList", "'}'"}); }
+Block: '{' BlockItemList '}'    { $$ = ast_manager.AddNode(new ast::CompoundStmt(ast_manager, @$, *$2)); }
     ;
 
-BlockItemList:                          { reduce("BlockItemList", {"⌀"}); }
-    | BlockItemList BlockItem           { reduce("BlockItemList", {"BlockItemList", "BlockItem"}); }
+BlockItemList:                          { $$ = new std::vector<ast::ASTLocation>(); }
+    | BlockItemList BlockItem           { $$ = $1; $$->emplace_back($2); }
 
-BlockItem : Decl        { reduce("BlockItem", {"Decl"}); }
-    | Stmt              { reduce("BlockItem", {"Stmt"}); }
+BlockItem : Decl        { $$ = ast_manager.AddNode(new ast::DeclStmt(ast_manager, @$, *$1)); }
+    | Stmt              { $$ = $1; }
     ;
 
-Stmt: ';'                               { reduce("Stmt", {"';'"}); }
-    | Exp ';'                           { reduce("Stmt", {"Exp", "';'"}); }
-    | LVal '=' Exp ';'                  { reduce("Stmt", {"LVal", "'='", "Exp", "';'"}); }
-    | Block                             { reduce("Stmt", {"Block"}); }
-    | "if" '(' Cond ')' Stmt %prec LOWER_THAN_ELSE      { reduce("Stmt", {"\"if\"", "'('", "Cond", "')'", "Stmt"}); }
-    | "if" '(' Cond ')' Stmt "else" Stmt                { reduce("Stmt", {"\"if\"", "'('", "Cond", "')'", "Stmt", "\"else\"", "Stmt"}); }
-    | "while" '(' Cond ')' Stmt             { reduce("Stmt", {"\"while\"", "'('", "Cond", "')'", "Stmt"}); }
-    | "break" ';'                           { reduce("Stmt", {"break", "';'"}); }
-    | "continue" ';'                        { reduce("Stmt", {"continue", "';'"}); }
-    | "return" ';'                          { reduce("Stmt", {"return", "';'"}); }
-    | "return" Exp ';'                      { reduce("Stmt", {"return", "Exp", "';'"}); }
+Stmt: ';'                   { $$ = ast_manager.AddNode(new ast::NullStmt(ast_manager, @$)); }
+    | Exp ';'               { $$ = $1; }
+    | LVal '=' Exp ';'      {
+                                $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAssign, $1, $3));
+                                ast_manager.GetNode($1).SetParent($$);
+                                ast_manager.GetNode($3).SetParent($$);
+                            }
+    | Block                 { $$ = $1; }
+    | "if" '(' Cond ')' Stmt %prec LOWER_THAN_ELSE      { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5)); }
+    | "if" '(' Cond ')' Stmt "else" Stmt                { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5, $7)); }
+    | "while" '(' Cond ')' Stmt     { $$ = ast_manager.AddNode(new ast::WhileStmt(ast_manager, @$, $3, $5)); }
+    | "break" ';'                   { $$ = ast_manager.AddNode(new ast::BreakStmt(ast_manager, @$)); }
+    | "continue" ';'                { $$ = ast_manager.AddNode(new ast::ContinueStmt(ast_manager, @$)); }
+    | "return" ';'                  { $$ = ast_manager.AddNode(new ast::ReturnStmt(ast_manager, @$)); }
+    | "return" Exp ';'              { $$ = ast_manager.AddNode(new ast::ReturnStmt(ast_manager, @$, $2)); }
     ;
 
-LVal: IDENT                             { reduce("LVal", {"IDENT"}); }
-    | IDENT ArrayReference              { reduce("LVal", {"IDENT", "ArrayReference"}); }
+LVal: IDENT                     { $$ = ast_manager.AddNode(new ast::DeclRefExpr(ast_manager, @$, $1)); }
+    | IDENT ArrayReference      { $$ = ast_manager.AddNode(new ast::DeclRefExpr(ast_manager, @$, $1, *$2)); }
     ;
 
-ArrayReference: '[' Exp ']'             { reduce("ArrayReference", {"'['", "Exp", "']'"}); }
-    | ArrayReference '[' Exp ']'        { reduce("ArrayReference", {"ArrayReference", "'['", "Exp", "']'"}); }
+ArrayReference: '[' Exp ']'         { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($2); }
+    | ArrayReference '[' Exp ']'    { $$ = $1; $$->emplace_back($3); }
     ;
 
 /* --------------- Expression --------------- */
 
-Exp: '(' Exp ')'        { reduce("Exp", {"'('", "Exp", "')'"}); }
-    | LVal              { reduce("Exp", {"LVal"}); }
-    | NUMBER            { reduce("Exp", {"NUMBER"}); }
-    | Exp '+' Exp           { reduce("Exp", {"Exp", "'+'", "Exp"}); }
-    | Exp '-' Exp           { reduce("Exp", {"Exp", "'-'", "Exp"}); }
-    | Exp '*' Exp           { reduce("Exp", {"Exp", "'*'", "Exp"}); }
-    | Exp '/' Exp           { reduce("Exp", {"Exp", "'/'", "Exp"}); }
-    | Exp '%' Exp           { reduce("Exp", {"Exp", "'%'", "Exp"}); }
-    | IDENT '(' FuncRParamList ')' %prec CALL       { reduce("Exp", {"IDENT", "'('", "FuncRParamList", "')'"}); }
-    | '+' Exp %prec PLUS                            { reduce("Exp", {"'+'", "Exp"}); }
-    | '-' Exp %prec MINUS                           { reduce("Exp", {"'-'", "Exp"}); }
-    | '!' Exp %prec NOT                             { reduce("Exp", {"'!'", "Exp"}); }
-    | Exp "||" Exp          { reduce("Exp", {"Exp", "\"||\"", "Exp"}); }
-    | Exp "&&" Exp          { reduce("Exp", {"Exp", "\"&&\"", "Exp"}); }
-    | Exp "==" Exp          { reduce("Exp", {"Exp", "\"==\"", "Exp"}); }
-    | Exp "!=" Exp          { reduce("Exp", {"Exp", "\"!=\"", "Exp"}); }
-    | Exp '<' Exp           { reduce("Exp", {"Exp", "'<'", "Exp"}); }
-    | Exp "<=" Exp          { reduce("Exp", {"Exp", "\"<=\"", "Exp"}); }
-    | Exp '>' Exp           { reduce("Exp", {"Exp", "'>'", "Exp"}); }
-    | Exp ">=" Exp          { reduce("Exp", {"Exp", "\">=\"", "Exp"}); }
+Exp: '(' Exp ')'        {
+                            $$ = ast_manager.AddNode(new ast::ParenExpr(ast_manager, @$, $2));
+                            ast_manager.GetNode($2).SetParent($$);
+                        }
+    | LVal              { $$ = $1; }
+    | NUMBER            { $$ = ast_manager.AddNode(new ast::IntegerLiteral(ast_manager, @$, $1)); }
+    | Exp '+' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAdd, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '-' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kSub, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '*' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kMul, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '/' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kDiv, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '%' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kRem, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | IDENT '(' FuncRParamList ')' %prec CALL   {
+                                                    $$ = ast_manager.AddNode(new ast::CallExpr(ast_manager, @$, $1, *$3));
+
+                                                }
+    | '+' Exp %prec PLUS    {
+                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kPlus, $2));
+                                ast_manager.GetNode($2).SetParent($$);
+                            }
+    | '-' Exp %prec MINUS   {
+                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kMinus, $2));
+                                ast_manager.GetNode($2).SetParent($$);
+                            }
+    | '!' Exp %prec NOT     {
+                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kNot, $2));
+                                ast_manager.GetNode($2).SetParent($$);
+                            }
+    | Exp "||" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kOr, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp "&&" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAnd, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp "==" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kEQ, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp "!=" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kNE, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '<' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLT, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp "<=" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLE, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp '>' Exp       {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGT, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
+    | Exp ">=" Exp      {
+                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGE, $1, $3));
+                            ast_manager.GetNode($1).SetParent($$);
+                            ast_manager.GetNode($3).SetParent($$);
+                        }
     ;
 
-FuncRParamList:                     { reduce("FuncRParamList", {"⌀"}); }
-    | Exp                           { reduce("FuncRParamList", {"Exp"}); }
-    | FuncRParamList ',' Exp        { reduce("FuncRParamList", {"FuncRParamList", "','", "Exp"}); }
+FuncRParamList:                 { $$ = new std::vector<ast::ASTLocation>(); }
+    | Exp                       { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($1); }
+    | FuncRParamList ',' Exp    { $$ = $1; $$->emplace_back($3); }
     ;
 
-ConstExp: Exp       { reduce("ConstExp", {"Exp"}); }
+ConstExp: Exp       { $$ = $1; }
     ;
 
-Cond: Exp           { reduce("Cond", {"Exp"}); }
+Cond: Exp           { $$ = $1; }
     ;
 
 %%
-
-std::string locationDump(YYLTYPE location) {
-    std::ostringstream result;
-    result << "<line:" << location.begin_line << ':' << location.begin_column
-           << ", ";
-    if (location.begin_line == location.end_line) {
-        result << "col:" << location.end_column << '>';
-    } else {
-        result << "line:" << location.end_line << ':' << location.end_column
-               << '>';
-    }
-    return result.str();
-}
-
-void reduce(const std::string &nonterminal,
-            std::initializer_list<std::string> list) {
-    std::cout << nonterminal
-              << util::FormatTerminal(" <---", util::kFGGreen, util::kBGDefault, {});
-    for (const auto &token : list) { std::cout << ' ' << token; }
-    std::cout << std::endl;
-}
 
 void yyerror(const char *format, ...) {
     va_list args;
     va_start(args, format);
 
-    std::cout << util::FormatTerminal("[ERROR] ", util::kFGBrightRed,
-                               util::kBGDefault, {util::kBold});
+    std::cout << util::FormatTerminalBold("[ERROR] ", util::kFGBrightRed);
     (void)vfprintf(stderr, format, args);
     std::cout << std::endl;
 
@@ -258,12 +381,10 @@ void yylerror(YYLTYPE location, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
-    std::cout << util::FormatTerminal("[ERROR] ", util::kFGBrightRed,
-                               util::kBGDefault, {util::kBold});
+    std::cout << util::FormatTerminalBold("[ERROR] ", util::kFGBrightRed);
     (void)vfprintf(stderr, format, args);
     std::cout << ' '
-              << util::FormatTerminal(locationDump(location), util::kFGYellow,
-                               util::kBGDefault, {})
+              << util::FormatTerminal(location.Dump(), util::kFGYellow)
               << std::endl;
 
     va_end(args);

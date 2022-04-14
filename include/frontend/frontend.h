@@ -1,14 +1,14 @@
 #ifndef __frontend_h__
 #define __frontend_h__
 
-#include "frontend/parser.h"
+#include "frontend/ast_manager.h"
+#include "frontend/source_manager.h"
 
-class Frontend {
-    parser::SourceManager src_manager;
+extern FILE *yyin;
+extern int yylex();
+extern int yyparse();
 
-    // TranslationUnit trans_unit
-
-    // Module m
-};
+extern ast::SourceManager src_manager;
+extern ast::ASTManager ast_manager;
 
 #endif
