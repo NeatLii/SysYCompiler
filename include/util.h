@@ -1,5 +1,5 @@
-#ifndef __utils_h__
-#define __utils_h__
+#ifndef __sysycompiler_util_h__
+#define __sysycompiler_util_h__
 
 #include <string>
 

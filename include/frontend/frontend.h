@@ -1,5 +1,5 @@
-#ifndef __frontend_h__
-#define __frontend_h__
+#ifndef __sysycompiler_frontend_frontend_h__
+#define __sysycompiler_frontend_frontend_h__
 
 #include "frontend/ast_manager.h"
 

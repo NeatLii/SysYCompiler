@@ -1,5 +1,5 @@
-#ifndef __source_manager_h__
-#define __source_manager_h__
+#ifndef __sysycompiler_frontend_source_manager_h__
+#define __sysycompiler_frontend_source_manager_h__
 
 #include <string>
 #include <vector>

@@ -1,5 +1,5 @@
-#ifndef __errors_h__
-#define __errors_h__
+#ifndef __sysycompiler_error_h__
+#define __sysycompiler_error_h__
 
 #include <stdexcept>
 

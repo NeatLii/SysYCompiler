@@ -1,5 +1,5 @@
-#ifndef __ast_manager_h__
-#define __ast_manager_h__
+#ifndef __sysycompiler_frontend_ast_manager_h__
+#define __sysycompiler_frontend_ast_manager_h__
 
 #include <memory>
 #include <unordered_map>
