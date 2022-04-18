@@ -1,17 +1,8 @@
 #include "frontend/ast_manager.h"
 
-#include <error.h>
-
-#include <algorithm>
-#include <array>
-#include <iostream>
-#include <memory>
 #include <sstream>
-#include <string>
-#include <utility>
-#include <vector>
 
-#include "frontend/source_manager.h"
+#include "error.h"
 #include "util.h"
 
 namespace ast {

@@ -1,8 +1,5 @@
-#include <bits/types/FILE.h>
-
 #include <iostream>
 
-#include "frontend/ast_manager.h"
 #include "frontend/frontend.h"
 
 ast::SourceManager src_manager;

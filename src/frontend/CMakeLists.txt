@@ -1,4 +1,11 @@
-# flex and bison lib
+# ast lib
+
+add_library(ast SHARED
+    source_manager.cc
+    ast_manager.cc
+)
+
+# parser lib
 
 find_package(BISON)
 find_package(FLEX)
@@ -16,15 +23,9 @@ add_library(parser SHARED
     ${BISON_SysYParser_OUTPUTS}
     ${FLEX_SysYLexer_OUTPUTS}
 )
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-# ast lib
-
-add_library(ast SHARED
-    source_manager.cc
-    ast_manager.cc
-)
 target_link_libraries(parser ast)
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 # parser tool
 

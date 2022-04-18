@@ -2,7 +2,6 @@
 #define __errors_h__
 
 #include <stdexcept>
-#include <string>
 
 // The followings are all unhandleable errors, used to throw directly, without
 // catch statement. But still save info fields for future expansion.

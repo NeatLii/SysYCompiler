@@ -1,15 +1,8 @@
 #ifndef __ast_manager_h__
 #define __ast_manager_h__
 
-#include <error.h>
-
 #include <memory>
-#include <ostream>
-#include <string>
-#include <typeinfo>
 #include <unordered_map>
-#include <utility>
-#include <vector>
 
 #include "frontend/source_manager.h"
 

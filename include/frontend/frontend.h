@@ -1,10 +1,7 @@
 #ifndef __frontend_h__
 #define __frontend_h__
 
-#include <vector>
-
 #include "frontend/ast_manager.h"
-#include "frontend/source_manager.h"
 
 extern FILE *yyin;
 extern int yylex();

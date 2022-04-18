@@ -1,13 +1,9 @@
 %{
 
-#include <stdarg.h>
-
-#include <initializer_list>
 #include <iostream>
-#include <sstream>
-#include <string>
 
-/* Include the definition of YYLTYPE, import SourceManager, ASTManager and RefList. */
+/* Include the definition of YYLTYPE, import SourceManager, ASTManager and
+ * RefList. */
 #include "frontend/frontend.h"
 
 /* Location type.  */
@@ -303,8 +299,7 @@ void yylerror(YYLTYPE location, const char *format, ...) {
 
     std::cout << util::FormatTerminalBold("[ERROR] ", util::kFGBrightRed);
     (void)vfprintf(stderr, format, args);
-    std::cout << ' '
-              << util::FormatTerminal(location.Dump(), util::kFGYellow)
+    std::cout << ' ' << util::FormatTerminal(location.Dump(), util::kFGYellow)
               << std::endl;
 
     va_end(args);
