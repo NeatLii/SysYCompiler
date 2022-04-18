@@ -31,27 +31,33 @@ class InvalidParameterValueException : public std::runtime_error {
         , parameter_literal_value(param_literal_value) {}
 };
 
-class IdentRefNotFindException : public std::runtime_error {
-  public:
-    const std::string file_name;
-    const std::string position;
-    const std::string ident;
-
-    IdentRefNotFindException(const std::string &file_name,
-                             const std::string &position,
-                             const std::string &ident)
-        : std::runtime_error("file '" + file_name + "' " + position
-                             + ", unable to find identifier '" + ident + '\'')
-        , file_name(file_name)
-        , position(position)
-        , ident(ident) {}
-};
-
 class InvalidOperatorException : public std::runtime_error {
   public:
     const std::string expr;
     explicit InvalidOperatorException(const std::string &expr)
         : std::runtime_error('\n' + expr), expr(expr) {}
+};
+
+class IdentRefNotFindException : public std::runtime_error {
+  public:
+    const std::string position;
+    const std::string ident;
+
+    IdentRefNotFindException(const std::string &position,
+                             const std::string &ident)
+        : std::runtime_error(position + ", unable to find identifier '" + ident
+                             + '\'')
+        , position(position)
+        , ident(ident) {}
+};
+
+class WrongInitListFormatException : public std::runtime_error {
+  public:
+    explicit WrongInitListFormatException(const std::string &dump)
+        : std::runtime_error('\n' + dump), dump(dump) {}
+
+  private:
+    const std::string dump;
 };
 
 class NotConstExprException : public std::runtime_error {

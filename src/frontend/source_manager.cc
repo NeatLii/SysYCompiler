@@ -1,12 +1,34 @@
 #include "frontend/source_manager.h"
 
-#include <string>
+#include <ostream>
 
 #include "util.h"
 
 namespace ast {
 
 /* struct SourceRange */
+
+SourceRange SourceRange::operator+(const SourceRange &rhs) const {
+    SourceRange sum{};
+    // begin
+    sum.begin_line = begin_line < rhs.begin_line ? begin_line : rhs.begin_line;
+    if (begin_line == rhs.begin_line) {
+        sum.begin_column
+            = begin_column < rhs.begin_column ? begin_column : rhs.begin_column;
+    } else {
+        sum.begin_column
+            = begin_line < rhs.begin_line ? begin_column : rhs.begin_column;
+    }
+    // end
+    sum.end_line = end_line > rhs.end_line ? end_line : rhs.end_line;
+    if (end_line == rhs.end_line) {
+        sum.end_column
+            = end_column > rhs.end_column ? end_column : rhs.end_column;
+    } else {
+        sum.end_column = end_line > rhs.end_line ? end_column : rhs.end_column;
+    }
+    return sum;
+}
 
 std::string SourceRange::DumpBegin() const {
     return "line:" + std::to_string(begin_line) + ':'
@@ -37,28 +59,6 @@ std::string Token::DumpRange() const {
     return '<' + util::FormatTerminal(range.DumpBegin(), util::kFGYellow) + ", "
            + util::FormatTerminal(range.DumpEnd(), util::kFGYellow) + '>';
 }
-
-/* struct TokenRange */
-
-// std::string TokenRange::DumpBegin(const SourceManager &src) const {
-//     return src.GetTokenRange(begin).DumpBegin();
-// }
-
-// std::string TokenRange::DumpEnd(const SourceManager &src) const {
-//     const SourceRange &begin_src = src.GetTokenRange(begin);
-//     const SourceRange &end_src = src.GetTokenRange(end);
-//     if (begin_src.begin_line == begin_src.end_line
-//         && begin_src.end_line == end_src.begin_line
-//         && end_src.begin_line == end_src.end_line) {
-//         return end_src.DumpEnd();
-//     }
-//     return "line:" + std::to_string(end_src.end_line) + ':'
-//            + std::to_string(end_src.end_column);
-// }
-
-// std::string TokenRange::Dump(const SourceManager &src) const {
-//     return '<' + DumpBegin(src) + ", " + DumpEnd(src) + '>';
-// }
 
 /* struct SourceManager */
 

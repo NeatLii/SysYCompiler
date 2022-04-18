@@ -1,16 +1,7 @@
-int main() {
-    int a, b;
-    ;
-    a = 10;
-    {}
-    if (a == 10) b = 10;
-    if (a == 10)
-        b = 10;
-    else
-        b = 20;
-    while (1) {
-        if (a == 1) continue;
-        break;
-    }
-    return 1;
+int a = 7;
+
+int func() {
+    int b = a;
+    int a = 1;
+    int c = c;
 }

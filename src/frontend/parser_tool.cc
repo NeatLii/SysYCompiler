@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include "frontend/ast_manager.h"
 #include "frontend/frontend.h"
 
 ast::SourceManager src_manager;
@@ -22,7 +23,8 @@ int main(int argc, char **argv) {
     yyin = src;
     int result = yyparse();
 
-    src_manager.Dump(std::cout);
+    ast_manager.GetRoot().Visit();
+
     ast_manager.Dump(std::cout);
     return result;
 }

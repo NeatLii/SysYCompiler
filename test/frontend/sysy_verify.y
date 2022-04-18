@@ -98,22 +98,22 @@ VarDefList: VarDef                      { reduce("VarDefList", {"VarDef"}); }
     | VarDefList ',' VarDef             { reduce("VarDefList", {"VarDefList", "','", "VarDef"}); }
     ;
 
-ConstDef: IDENT '=' ConstExp                        { reduce("ConstDef", {"IDENT", "'='", "ConstExp"}); }
-    | IDENT ArrayDimension '=' ConstArrayInit       { reduce("ConstDef", {"IDENT", "ArrayDimension", "'='", "ConstArrayInit"}); }
+ConstDef: IDENT '=' ConstExp                    { reduce("ConstDef", {"IDENT", "'='", "ConstExp"}); }
+    | IDENT ArrayDimension '=' ConstArrayInit   { reduce("ConstDef", {"IDENT", "ArrayDimension", "'='", "ConstArrayInit"}); }
     ;
-VarDef: IDENT                                       { reduce("VarDef", {"IDENT"}); }
-    | IDENT '=' Exp                                 { reduce("VarDef", {"IDENT", "'='", "Exp"}); }
-    | IDENT ArrayDimension                          { reduce("VarDef", {"IDENT", "ArrayDimension"}); }
-    | IDENT ArrayDimension '=' ArrayInit            { reduce("VarDef", {"IDENT", "ArrayDimension", "'='", "ArrayInit"}); }
-    ;
-
-ArrayDimension: '[' ConstExp ']'            { reduce("ArrayDimension", {"'['", "ConstExp", "']'"}); }
-    | ArrayDimension '[' ConstExp ']'       { reduce("ArrayDimension", {"ArrayDimension", "'['", "ConstExp", "']'"}); }
+VarDef: IDENT                                   { reduce("VarDef", {"IDENT"}); }
+    | IDENT '=' Exp                             { reduce("VarDef", {"IDENT", "'='", "Exp"}); }
+    | IDENT ArrayDimension                      { reduce("VarDef", {"IDENT", "ArrayDimension"}); }
+    | IDENT ArrayDimension '=' ArrayInit        { reduce("VarDef", {"IDENT", "ArrayDimension", "'='", "ArrayInit"}); }
     ;
 
 ConstArrayInit: '{' ConstInitList '}'       { reduce("ConstArrayInit", {"'{'", "ConstInitList", "'}'"}); }
     ;
 ArrayInit: '{' InitList '}'                 { reduce("ArrayInit", {"'{'", "InitList", "'}'"}); }
+    ;
+
+ArrayDimension: '[' ConstExp ']'            { reduce("ArrayDimension", {"'['", "ConstExp", "']'"}); }
+    | ArrayDimension '[' ConstExp ']'       { reduce("ArrayDimension", {"ArrayDimension", "'['", "ConstExp", "']'"}); }
     ;
 
 ConstInitList:                              { reduce("ConstInitList", {"⌀"}); }
@@ -126,10 +126,10 @@ InitList:                                   { reduce("InitList", {"⌀"}); }
     ;
 
 ConstInitItem: ConstExp         { reduce("ConstInitItem", {"ConstExp"}); }
-    | ConstArrayInit            { reduce("ConstInitItem", {"ConstArrayInit"}); }
+    | '{' ConstInitList '}'     { reduce("ConstInitItem", {"'{'", "ConstInitList", "'}'"}); }
     ;
 InitItem: Exp                   { reduce("InitItem", {"Exp"}); }
-    | ArrayInit                 { reduce("InitItem", {"ArrayInit"}); }
+    | '{' InitList '}'          { reduce("InitItem", {"'{'", "InitList", "'}'"}); }
     ;
 
 /* --------------- Function Definition --------------- */

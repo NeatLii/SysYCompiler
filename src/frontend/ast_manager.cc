@@ -2,10 +2,14 @@
 
 #include <error.h>
 
+#include <algorithm>
 #include <array>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "frontend/source_manager.h"
 #include "util.h"
@@ -17,12 +21,14 @@ namespace ast {
 ASTLocation ASTManager::AddNode(ASTNode *node) {
     node_table.emplace_back(node);
     node->SetLocation(node_table.size() - 1);
+    node->Link();
     return node_table.size() - 1;
 }
 
 ASTLocation ASTManager::AddNode(std::unique_ptr<ASTNode> &node) {
     node_table.emplace_back(node.release());
     node->SetLocation(node_table.size() - 1);
+    node->Link();
     return node_table.size() - 1;
 }
 
@@ -65,11 +71,12 @@ void ASTManager::Dump(std::ostream &ostream) const {
     ostream << " '" << util::FormatTerminal(raw.GetFileName(), util::kFGYellow)
             << '\'';
     ostream << ", "
-            << util::FormatTerminalBold("AST Node count", util::kFGBrightGreen)
+            << util::FormatTerminalBold("AST node count", util::kFGBrightGreen)
             << ' ' << node_table.size();
     ostream << std::endl;
     node_table[root]->Dump(ostream, "", true);
 }
+
 /* class IdentTable */
 
 std::pair<bool, ASTLocation> IdentTable::FindIdent(
@@ -104,7 +111,8 @@ void ASTNode::DumpInfo(std::ostream &ostream, const std::string &kind) const {
         kind, IsDecl() ? util::kFGBrightGreen : util::kFGBrightMagenta);
     // node location
     ostream << ' '
-            << util::FormatTerminal(util::FormatHex32(loc), util::kFGYellow);
+            << util::FormatTerminal(util::FormatHex32(location),
+                                    util::kFGYellow);
     // node source range
     ostream << " <" << util::FormatTerminal(range.DumpBegin(), util::kFGYellow)
             << ", " << util::FormatTerminal(range.DumpEnd(), util::kFGYellow)
@@ -114,8 +122,13 @@ void ASTNode::DumpInfo(std::ostream &ostream, const std::string &kind) const {
 /* class TranslationUnit */
 
 void TranslationUnit::AddDecl(const ASTLocation loc) {
+    src.GetNode(loc).SetParent(this->location);
     decl_list.emplace_back(loc);
     ident_table.emplace(src.GetDecl(loc).GetIdentName(), loc);
+}
+
+void TranslationUnit::Visit() {
+    for (auto decl : decl_list) src.GetNode(decl).Visit();
 }
 
 void TranslationUnit::Dump(std::ostream &ostream,
@@ -133,6 +146,47 @@ void TranslationUnit::Dump(std::ostream &ostream,
     src.GetDecl(*iter).Dump(ostream, "", true);
 }
 
+void TranslationUnit::BuiltIn() {
+    SourceManager &raw = GetSourceManager();
+    auto *getint = new FunctionDecl(src, {}, raw.AddToken("getint", {}));
+    auto *getch = new FunctionDecl(src, {}, raw.AddToken("getch", {}));
+    auto *getarray = new FunctionDecl(
+        src, {}, raw.AddToken("getarray", {}),
+        std::vector<ASTLocation>{src.AddNode(
+            new ParamVarDecl(src, {}, raw.AddToken("a", {}), true))});
+    auto *putint = new FunctionDecl(
+        src, {}, raw.AddToken("putint", {}),
+        std::vector<ASTLocation>{
+            src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("a", {})))});
+    auto *putch = new FunctionDecl(
+        src, {}, raw.AddToken("putch", {}),
+        std::vector<ASTLocation>{
+            src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("a", {})))});
+    auto *putarray = new FunctionDecl(
+        src, {}, raw.AddToken("putarray", {}),
+        {src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("n", {}))),
+         src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("a", {}), true))});
+    auto *starttime = new FunctionDecl(src, {}, raw.AddToken("starttime", {}));
+    auto *stoptime = new FunctionDecl(src, {}, raw.AddToken("stoptime", {}));
+
+    getint->SetType(Decl::kInt);
+    getch->SetType(Decl::kInt);
+    getarray->SetType(Decl::kInt);
+    putint->SetType(Decl::kVoid);
+    putch->SetType(Decl::kVoid);
+    putarray->SetType(Decl::kVoid);
+    starttime->SetType(Decl::kVoid);
+    stoptime->SetType(Decl::kVoid);
+    AddDecl(src.AddNode(getint));
+    AddDecl(src.AddNode(getch));
+    AddDecl(src.AddNode(getarray));
+    AddDecl(src.AddNode(putint));
+    AddDecl(src.AddNode(putch));
+    AddDecl(src.AddNode(putarray));
+    AddDecl(src.AddNode(starttime));
+    AddDecl(src.AddNode(stoptime));
+}
+
 /* class Decl */
 
 /* class VarDecl */
@@ -143,6 +197,29 @@ std::string VarDecl::TypeStr() const {
         type_str += '[' + std::to_string(src.GetExpr(expr).GetValue()) + ']';
     }
     return is_const ? "const " + type_str : type_str;
+}
+
+void VarDecl::Link() {
+    for (auto expr : arr_dim_list) src.GetNode(expr).SetParent(location);
+    if (has_init) src.GetNode(init).SetParent(location);
+}
+
+void VarDecl::Visit() {
+    std::vector<int> format;
+    for (auto expr : arr_dim_list) {
+        src.GetNode(expr).Visit();
+        format.emplace_back(src.GetExpr(expr).GetValue());
+    }
+    if (has_init) {
+        src.GetNode(init).Visit();
+        // format arr init list
+        if (IsArray()) {
+            auto &old_init = src.GetNode(init).Cast<InitListExpr>();
+            init = InitListExpr::Format(src, old_init.GetRange(),
+                                        old_init.GetInitList(), format);
+            src.GetNode(init).SetParent(location);
+        }
+    }
 }
 
 void VarDecl::Dump(std::ostream &ostream,
@@ -183,6 +260,14 @@ std::string ParamVarDecl::TypeStr() const {
     return type_str;
 }
 
+void ParamVarDecl::Link() {
+    for (auto expr : arr_dim_list) src.GetNode(expr).SetParent(location);
+}
+
+void ParamVarDecl::Visit() {
+    for (auto expr : arr_dim_list) src.GetNode(expr).Visit();
+}
+
 void ParamVarDecl::Dump(std::ostream &ostream,
                         const std::string &indent,
                         const bool is_last) const {
@@ -201,6 +286,13 @@ void ParamVarDecl::Dump(std::ostream &ostream,
 
 /* class FunctionDecl */
 
+void FunctionDecl::SetDef(const ASTLocation def) {
+    has_def = true;
+    this->def = def;
+    src.GetNode(def).SetParent(location);
+    Link();
+}
+
 std::string FunctionDecl::TypeStr() const {
     std::string type_str = type == kVoid ? "void (" : "int (";
     for (auto iter = param_list.cbegin(); iter != param_list.cend(); ++iter) {
@@ -208,6 +300,22 @@ std::string FunctionDecl::TypeStr() const {
         type_str += src.GetNode(*iter).Cast<const ParamVarDecl &>().TypeStr();
     }
     return type_str + ')';
+}
+
+void FunctionDecl::Link() {
+    for (auto decl : param_list) src.GetNode(decl).SetParent(location);
+    if (has_def) {
+        auto &body = src.GetNode(def).Cast<CompoundStmt>();
+        body.SetParent(location);
+        for (auto decl : param_list) {
+            body.AddIdent(src.GetDecl(decl).GetIdentName(), decl);
+        }
+    }
+}
+
+void FunctionDecl::Visit() {
+    for (auto decl : param_list) src.GetNode(decl).Visit();
+    if (has_def) src.GetNode(def).Visit();
 }
 
 void FunctionDecl::Dump(std::ostream &ostream,
@@ -241,6 +349,22 @@ void FunctionDecl::Dump(std::ostream &ostream,
 
 /* class CompoundStmt */
 
+void CompoundStmt::Link() {
+    for (auto stmt : stmt_list) {
+        auto &child = src.GetNode(stmt);
+        child.SetParent(location);
+        if (child.kind == kDeclStmt) {
+            for (auto decl : child.Cast<DeclStmt>().GetDeclList()) {
+                ident_table.emplace(src.GetDecl(decl).GetIdentName(), decl);
+            }
+        }
+    }
+}
+
+void CompoundStmt::Visit() {
+    for (auto stmt : stmt_list) src.GetNode(stmt).Visit();
+}
+
 void CompoundStmt::Dump(std::ostream &ostream,
                         const std::string &indent,
                         const bool is_last) const {
@@ -260,6 +384,14 @@ void CompoundStmt::Dump(std::ostream &ostream,
 }
 
 /* class DeclStmt */
+
+void DeclStmt::Link() {
+    for (auto decl : decl_list) src.GetNode(decl).SetParent(location);
+}
+
+void DeclStmt::Visit() {
+    for (auto decl : decl_list) src.GetNode(decl).Visit();
+}
 
 void DeclStmt::Dump(std::ostream &ostream,
                     const std::string &indent,
@@ -290,6 +422,18 @@ void NullStmt::Dump(std::ostream &ostream,
 
 /* class IfStmt */
 
+void IfStmt::Link() {
+    src.GetNode(cond).SetParent(location);
+    src.GetNode(then_stmt).SetParent(location);
+    if (has_else) src.GetNode(else_stmt).SetParent(location);
+}
+
+void IfStmt::Visit() {
+    src.GetNode(cond).Visit();
+    src.GetNode(then_stmt).Visit();
+    if (has_else) src.GetNode(else_stmt).Visit();
+}
+
 void IfStmt::Dump(std::ostream &ostream,
                   const std::string &indent,
                   const bool is_last) const {
@@ -307,6 +451,16 @@ void IfStmt::Dump(std::ostream &ostream,
 }
 
 /* class WhileStmt */
+
+void WhileStmt::Link() {
+    src.GetNode(cond).SetParent(location);
+    src.GetNode(body).SetParent(location);
+}
+
+void WhileStmt::Visit() {
+    src.GetNode(cond).Visit();
+    src.GetNode(body).Visit();
+}
 
 void WhileStmt::Dump(std::ostream &ostream,
                      const std::string &indent,
@@ -346,6 +500,14 @@ void BreakStmt::Dump(std::ostream &ostream,
 
 /* class ReturnStmt */
 
+void ReturnStmt::Link() {
+    if (has_expr) src.GetNode(expr).SetParent(location);
+}
+
+void ReturnStmt::Visit() {
+    if (has_expr) src.GetNode(expr).Visit();
+}
+
 void ReturnStmt::Dump(std::ostream &ostream,
                       const std::string &indent,
                       const bool is_last) const {
@@ -376,6 +538,9 @@ void IntegerLiteral::Dump(std::ostream &ostream,
                           const std::string &indent,
                           const bool is_last) const {
     DumpIndentAndBranch(ostream, indent, is_last);
+    if (is_filler) {
+        ostream << util::FormatTerminal("array_filler:", util::kFGBlue) << ' ';
+    }
     DumpInfo(ostream, "IntegerLiteral");
     // value type
     ostream << ' ' << util::FormatTerminal("'int'", util::kFGGreen);
@@ -387,11 +552,11 @@ void IntegerLiteral::Dump(std::ostream &ostream,
 
 /* class ParenExpr */
 
-ParenExpr::ParenExpr(const ASTManager &src,
-                     SourceRange range,
-                     const ASTLocation sub_expr)
-    : Expr(kParenExpr, src, range), sub_expr(sub_expr) {
-    const Expr &expr = GetSubExpr();
+void ParenExpr::Link() { src.GetNode(sub_expr).SetParent(location); }
+
+void ParenExpr::Visit() {
+    Expr &expr = src.GetExpr(sub_expr);
+    expr.Visit();
     is_const = expr.IsConst();
     value = expr.GetValue();
 }
@@ -414,45 +579,6 @@ void ParenExpr::Dump(std::ostream &ostream,
 
 /* class DeclRefExpr */
 
-DeclRefExpr::DeclRefExpr(const ASTManager &src,
-                         SourceRange range,
-                         const TokenLocation ident,
-                         std::vector<ASTLocation> arr_dim_list,
-                         const bool has_ref,
-                         const ASTLocation ref)
-    : Expr(kDeclRefExpr, src, range)
-    , ident(ident)
-    , arr_dim_list(std::move(arr_dim_list))
-    , has_ref(has_ref)
-    , ref(ref) {
-    for (auto expr : arr_dim_list) {
-        if (!src.GetExpr(expr).IsConst()) return;
-    }
-    is_const = true;
-}
-
-void DeclRefExpr::SetRef(const ASTLocation ref) {
-    has_ref = true;
-    this->ref = ref;
-    // if (!is_const || GetRef().kind == kParamVarDecl
-    //     || !src.GetNode(ref).Cast<VarDecl>().IsConst()) {
-    //     is_const = false;
-    //     return;
-    // }
-    // // calculate value
-    // if (arr_dim_list.empty()) {
-    //     value = src.GetNode(ref).Cast<VarDecl>().GetInit().GetValue();
-    //     return;
-    // }
-    // const Expr &init = src.GetNode(ref).Cast<VarDecl>().GetInit();
-    // for (auto expr : arr_dim_list) {
-    //     init
-    //         =
-    //         init.Cast<InitListExpr>().GetInitAt(src.GetExpr(expr).GetValue());
-    // }
-    // value = init.GetValue();
-}
-
 std::string DeclRefExpr::TypeStr() const {
     std::string type_str = "int";
     for (std::vector<ASTLocation>::size_type i = 0; i < arr_dim_list.size();
@@ -460,6 +586,16 @@ std::string DeclRefExpr::TypeStr() const {
         type_str += "[]";
     }
     return type_str;
+}
+
+void DeclRefExpr::Link() {
+    for (auto expr : arr_dim_list) src.GetNode(expr).SetParent(location);
+}
+
+void DeclRefExpr::Visit() {
+    for (auto expr : arr_dim_list) src.GetNode(expr).Visit();
+    FindRef();
+    CalculateValue();
 }
 
 void DeclRefExpr::Dump(std::ostream &ostream,
@@ -484,8 +620,68 @@ void DeclRefExpr::Dump(std::ostream &ostream,
             << util::FormatTerminal(
                    has_ref ? ('\'' + GetRef().TypeStr() + '\'') : "'unknown'",
                    util::kFGGreen);
+    // value
+    DumpConstExpr(ostream);
     // newline
     ostream << std::endl;
+    // arr dim
+    if (!arr_dim_list.empty()) {
+        const std::string child_indent = indent + (is_last ? "  " : "| ");
+        auto iter = arr_dim_list.cbegin();
+        for (; iter != arr_dim_list.cend() - 1; ++iter) {
+            src.GetExpr(*iter).Dump(ostream, child_indent, false);
+        }
+        src.GetExpr(*iter).Dump(ostream, child_indent, true);
+    }
+}
+
+void DeclRefExpr::FindRef() {
+    const std::string name = GetIdentName();
+    ASTLocation cur = parent;
+    while (!has_ref) {
+        ASTNode &cur_node = src.GetNode(cur);
+        auto result = cur_node.FindIdent(name);
+        /*
+         *  int a = 7;           // TokenLocation 'a' = 1
+         *  int func() {
+         *      int b = a;       // TokenLocation 'b' = 11, 'a' = 13
+         *      int a = 1;       // TokenLocation 'a' = 16
+         *  }
+         *  // bug: int c = c;
+         */
+        if (result.first && ident > src.GetDecl(result.second).GetIdentLoc()) {
+            has_ref = true;
+            ref = result.second;
+            continue;
+        }
+        if (cur_node.HasParent()) {
+            cur = cur_node.GetParent();
+            continue;
+        }
+        throw IdentRefNotFindException(GetIdentRange().Dump(), GetIdentName());
+    }
+}
+
+void DeclRefExpr::CalculateValue() {
+    /*
+     *   int a;
+     *   b[10];     // possible const
+     *   b[a];      // impossible const
+     */
+    for (auto expr : this->arr_dim_list) {
+        if (!src.GetExpr(expr).IsConst()) return;
+    }
+    if (GetRef().kind == kParamVarDecl
+        || !src.GetNode(ref).Cast<VarDecl>().IsConst()) {
+        return;
+    }
+    is_const = true;
+    if (arr_dim_list.empty()) {
+        value = src.GetNode(ref).Cast<VarDecl>().GetInit().GetValue();
+    } else {
+        value = InitListExpr::GetInitValue(
+            src, src.GetNode(ref).Cast<VarDecl>().GetInitList(), arr_dim_list);
+    }
 }
 
 /* class CallExpr */
@@ -504,6 +700,15 @@ std::string CallExpr::TypeStr() const {
         type_str += ')';
     }
     return type_str;
+}
+
+void CallExpr::Link() {
+    for (auto expr : param_list) src.GetNode(expr).SetParent(location);
+}
+
+void CallExpr::Visit() {
+    for (auto expr : param_list) src.GetNode(expr).Visit();
+    FindRef();
 }
 
 void CallExpr::Dump(std::ostream &ostream,
@@ -530,16 +735,72 @@ void CallExpr::Dump(std::ostream &ostream,
                    util::kFGGreen);
     // newline
     ostream << std::endl;
+    // param list
+    if (!param_list.empty()) {
+        const std::string child_indent = indent + (is_last ? "  " : "| ");
+        auto iter = param_list.cbegin();
+        for (; iter != param_list.cend() - 1; ++iter) {
+            src.GetNode(*iter).Dump(ostream, child_indent, false);
+        }
+        src.GetNode(*iter).Dump(ostream, child_indent, true);
+    }
+}
+
+void CallExpr::FindRef() {
+    const std::string name = GetIdentName();
+    ASTLocation cur = parent;
+    while (!has_ref) {
+        ASTNode &cur_node = src.GetNode(cur);
+        auto result = cur_node.FindIdent(name);
+        if (result.first && ident > src.GetDecl(result.second).GetIdentLoc()) {
+            has_ref = true;
+            ref = result.second;
+            continue;
+        }
+        if (cur_node.HasParent()) {
+            cur = cur_node.GetParent();
+            continue;
+        }
+        throw IdentRefNotFindException(GetIdentRange().Dump(), GetIdentName());
+    }
 }
 
 /* class BinaryOperator */
 
-BinaryOperator::BinaryOperator(const ASTManager &src,
-                               const SourceRange range,
-                               const BinaryOpKind op_code,
-                               const ASTLocation LHS,
-                               const ASTLocation RHS)
-    : Expr(kBinaryOperator, src, range), op_code(op_code), LHS(LHS), RHS(RHS) {
+void BinaryOperator::Link() {
+    src.GetNode(LHS).SetParent(location);
+    src.GetNode(RHS).SetParent(location);
+}
+
+void BinaryOperator::Visit() {
+    src.GetNode(LHS).Visit();
+    src.GetNode(RHS).Visit();
+    CalculateValue();
+}
+
+void BinaryOperator::Dump(std::ostream &ostream,
+                          const std::string &indent,
+                          const bool is_last) const {
+    DumpIndentAndBranch(ostream, indent, is_last);
+    DumpInfo(ostream, "BinaryOperator");
+    // value type
+    ostream << ' ' << util::FormatTerminal("'int'", util::kFGGreen);
+    // op
+    static std::array<std::string, kAssign + 1> binary_op{
+        "'+'",  "'-'",  "'*'", "'/'",  "'%'", "'||'", "'&&'",
+        "'=='", "'!='", "'<'", "'<='", "'>'", "'>='", "'='"};
+    ostream << ' ' << binary_op[op_code];
+    // value
+    DumpConstExpr(ostream);
+    // newline
+    ostream << std::endl;
+    // LHS and RHS
+    const std::string child_indent = indent + (is_last ? "  " : "| ");
+    GetLHS().Dump(ostream, child_indent, false);
+    GetRHS().Dump(ostream, child_indent, true);
+}
+
+void BinaryOperator::CheckOp() const {
     if (op_code < kAdd || kAssign < op_code) {
         std::stringstream dump;
         GetLHS().Dump(dump, "", true);
@@ -547,6 +808,10 @@ BinaryOperator::BinaryOperator(const ASTManager &src,
         GetRHS().Dump(dump, "", true);
         throw InvalidOperatorException(dump.str());
     }
+}
+
+void BinaryOperator::CalculateValue() {
+    is_const = false;
     const Expr &lhs = GetLHS();
     const Expr &rhs = GetRHS();
     if (lhs.IsConst() && rhs.IsConst()) {
@@ -600,57 +865,11 @@ BinaryOperator::BinaryOperator(const ASTManager &src,
     }
 }
 
-void BinaryOperator::Dump(std::ostream &ostream,
-                          const std::string &indent,
-                          const bool is_last) const {
-    DumpIndentAndBranch(ostream, indent, is_last);
-    DumpInfo(ostream, "BinaryOperator");
-    // value type
-    ostream << ' ' << util::FormatTerminal("'int'", util::kFGGreen);
-    // op
-    static std::array<std::string, kAssign + 1> binary_op{
-        "'+'",  "'-'",  "'*'", "'/'",  "'%'", "'||'", "'&&'",
-        "'=='", "'!='", "'<'", "'<='", "'>'", "'>='", "'='"};
-    ostream << ' ' << binary_op[op_code];
-    // value
-    DumpConstExpr(ostream);
-    // newline
-    ostream << std::endl;
-    // LHS and RHS
-    const std::string child_indent = indent + (is_last ? "  " : "| ");
-    GetLHS().Dump(ostream, child_indent, false);
-    GetRHS().Dump(ostream, child_indent, true);
-}
-
 /* class UnaryOperator */
 
-UnaryOperator::UnaryOperator(const ASTManager &src,
-                             const SourceRange range,
-                             const UnaryOpKind op_code,
-                             const ASTLocation sub_expr)
-    : Expr(kUnaryOperator, src, range), op_code(op_code), sub_expr(sub_expr) {
-    if (op_code < kPlus || kNot < op_code) {
-        std::stringstream dump;
-        dump << "op_code: " << std::to_string(op_code) << '\n';
-        GetSubExpr().Dump(dump, "", true);
-        throw InvalidOperatorException(dump.str());
-    }
-    const Expr &sub = GetSubExpr();
-    if (sub.IsConst()) {
-        is_const = true;
-        switch (op_code) {
-            case kPlus:
-                value = sub.GetValue();
-                break;
-            case kMinus:
-                value = -sub.GetValue();
-                break;
-            case kNot:
-                value = static_cast<int>(sub.GetValue() == 0);
-                break;
-        }
-    }
-}
+void UnaryOperator::Link() { src.GetNode(sub_expr).SetParent(location); }
+
+void UnaryOperator::Visit() { src.GetNode(sub_expr).Visit(); }
 
 void UnaryOperator::Dump(std::ostream &ostream,
                          const std::string &indent,
@@ -671,32 +890,146 @@ void UnaryOperator::Dump(std::ostream &ostream,
     GetSubExpr().Dump(ostream, child_indent, true);
 }
 
+void UnaryOperator::CheckOp() const {
+    if (op_code < kPlus || kNot < op_code) {
+        std::stringstream dump;
+        dump << "op_code: " << std::to_string(op_code) << '\n';
+        GetSubExpr().Dump(dump, "", true);
+        throw InvalidOperatorException(dump.str());
+    }
+}
+
+void UnaryOperator::CalculateValue() {
+    is_const = false;
+    const Expr &sub = GetSubExpr();
+    if (sub.IsConst()) {
+        is_const = true;
+        switch (op_code) {
+            case kPlus:
+                value = sub.GetValue();
+                break;
+            case kMinus:
+                value = -sub.GetValue();
+                break;
+            case kNot:
+                value = static_cast<int>(sub.GetValue() == 0);
+                break;
+        }
+    }
+}
+
 /* class InitListExpr */
 
-InitListExpr::InitListExpr(const ASTManager &src, std::vector<ASTLocation> list)
-    : Expr(kInitListExpr, src, range), init_list(std::move(list)) {
-    for (auto init : init_list) {
-        if (!src.GetExpr(init).IsConst()) return;
+int InitListExpr::GetInitValue(const ASTManager &src,
+                               const InitListExpr &target,
+                               const std::vector<ASTLocation> &index) {
+    if (target.is_filler) { return 0; }
+    if (index.size() == 1) {
+        return target.GetInitAt(src.GetExpr(index.front()).GetValue())
+            .GetValue();
     }
-    is_const = true;
+    return GetInitValue(src,
+                        target.GetInitAt(src.GetExpr(index.front()).GetValue())
+                            .Cast<InitListExpr>(),
+                        {index.begin() + 1, index.end()});
+}
+
+std::string InitListExpr::TypeStr() const {
+    std::string type_str = "int";
+    for (auto len : format) type_str += '[' + std::to_string(len) + ']';
+    return type_str;
+}
+
+void InitListExpr::Link() {
+    for (auto expr : init_list) src.GetNode(expr).SetParent(location);
+}
+
+void InitListExpr::Visit() {
+    for (auto expr : init_list) src.GetNode(expr).Visit();
+    CalculateValue();
 }
 
 void InitListExpr::Dump(std::ostream &ostream,
                         const std::string &indent,
                         const bool is_last) const {
     DumpIndentAndBranch(ostream, indent, is_last);
+    if (is_filler) {
+        ostream << util::FormatTerminal("array_filler:", util::kFGBlue) << ' ';
+    }
     DumpInfo(ostream, "ArrayInitList");
+    // type
+    ostream << ' '
+            << util::FormatTerminal('\'' + TypeStr() + '\'', util::kFGGreen);
     // newline
     ostream << std::endl;
     // init list
     if (!init_list.empty()) {
         const std::string child_indent = indent + (is_last ? "  " : "| ");
-        auto iter = init_list.cbegin();
-        for (; iter != init_list.cend() - 1; ++iter) {
-            src.GetExpr(*iter).Dump(ostream, child_indent, false);
+        for (auto iter = init_list.cbegin(); iter != init_list.cend(); ++iter) {
+            src.GetExpr(*iter).Dump(ostream, child_indent,
+                                    *iter == init_list.back());
         }
-        src.GetExpr(*iter).Dump(ostream, child_indent, true);
     }
+}
+
+ASTLocation InitListExpr::Format(ASTManager &src,
+                                 const SourceRange &range,
+                                 const std::vector<ASTLocation> &list,
+                                 const std::vector<int> &format) {
+    // filler
+    if (list.empty()) {
+        return src.AddNode(new InitListExpr(src, range, list, format, true));
+    }
+    std::vector<ASTLocation> new_list;
+    auto iter = list.begin();
+    // for one dimension, padding missing 0
+    if (format.size() == 1) {
+        for (int i = 0; i < format.front(); ++i, ++iter) {
+            if (iter < list.end()) {
+                new_list.emplace_back(*iter);
+            } else {
+                new_list.emplace_back(
+                    src.AddNode(new IntegerLiteral(src, {}, 0, true)));
+            }
+        }
+    }
+    // multiple dimension
+    else {
+        int sub_size = 1;
+        for (auto iter = format.cbegin() + 1; iter != format.cend(); ++iter) {
+            sub_size *= *iter;
+        }
+        for (int i = 0; i < format.front(); ++i, ++iter) {
+            if (iter < list.end()) {
+                if (src.GetNode(*iter).kind != kInitListExpr) {
+                    auto last = iter + sub_size < list.end() ? iter + sub_size
+                                                             : list.end();
+                    new_list.emplace_back(Format(
+                        src,
+                        src.GetNode(*iter).GetRange()
+                            + src.GetNode(*(last - 1)).GetRange(),
+                        {iter, last}, {format.cbegin() + 1, format.cend()}));
+                    iter += sub_size - 1;
+                } else {
+                    new_list.emplace_back(Format(
+                        src, src.GetNode(*iter).GetRange(),
+                        src.GetNode(*iter).Cast<InitListExpr>().GetInitList(),
+                        {format.cbegin() + 1, format.cend()}));
+                }
+            } else {
+                new_list.emplace_back(src.AddNode(new InitListExpr(
+                    src, {}, {}, {format.cbegin() + 1, format.cend()}, true)));
+            }
+        }
+    }
+    return src.AddNode(new InitListExpr(src, range, new_list, format));
+}
+
+void InitListExpr::CalculateValue() {
+    for (auto init : init_list) {
+        if (!src.GetExpr(init).IsConst()) return;
+    }
+    is_const = true;
 }
 
 }  // namespace ast

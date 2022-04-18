@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-/* Include the definition of YYLTYPE, import SourceManager and ASTManager. */
+/* Include the definition of YYLTYPE, import SourceManager, ASTManager and RefList. */
 #include "frontend/frontend.h"
 
 /* Location type.  */
@@ -43,7 +43,7 @@ void yylerror(YYLTYPE location, const char *format, ...);
 %union{
     ast::TokenLocation token;
     ast::ASTLocation ast;
-    std::vector<ast::ASTLocation> *node_list;
+    std::vector<ast::ASTLocation> *list;
     bool b;
     int integer;
 }
@@ -71,28 +71,28 @@ void yylerror(YYLTYPE location, const char *format, ...);
 
 %type <ast> CompUnit
 
-%type <node_list> Decl
+%type <list> Decl
 %type <token> BType
-%type <node_list> ConstDefList VarDefList
+%type <list> ConstDefList VarDefList
 %type <ast> ConstDef VarDef
 
-%type <node_list> ArrayDimension
+%type <list> ArrayDimension
 %type <ast> ConstArrayInit ArrayInit
-%type <node_list> ConstInitList InitList
+%type <list> ConstInitList InitList
 %type <ast> ConstInitItem InitItem
 
-%type <ast> FuncDef
+%type <ast> FuncDef FuncDecl
 %type <b> FuncType
-%type <node_list> FuncFParamList
+%type <list> FuncFParamList
 %type <ast> FuncFParam
 
 %type <ast> Block
-%type <node_list> BlockItemList
+%type <list> BlockItemList
 %type <ast> BlockItem Stmt LVal
-%type <node_list> ArrayReference
+%type <list> ArrayReference
 
 %type <ast> Exp ConstExp Cond
-%type <node_list> FuncRParamList
+%type <list> FuncRParamList
 
 /* priority and associativity */
 
@@ -117,15 +117,11 @@ CompUnit:                   {
     | CompUnit Decl         {
                                 $$ = $1;
                                 ast_manager.GetRoot().SetRange(@$);
-                                for(ast::ASTLocation decl : *$2) {
-                                    ast_manager.GetDecl(decl).SetParent($$);
-                                    ast_manager.GetRoot().AddDecl(decl);
-                                }
+                                for(auto decl : *$2) ast_manager.GetRoot().AddDecl(decl);
                             }
     | CompUnit FuncDef      {
                                 $$ = $1;
                                 ast_manager.GetRoot().SetRange(@$);
-                                ast_manager.GetDecl($2).SetParent($$);
                                 ast_manager.GetRoot().AddDecl($2);
                             }
     ;
@@ -134,13 +130,11 @@ CompUnit:                   {
 
 Decl: "const" BType ConstDefList ';'    {
                                             $$ = $3;
-                                            for(ast::ASTLocation decl : *$$)
-                                                ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
+                                            for(auto decl : *$$) ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
                                         }
     | BType VarDefList ';'              {
                                             $$ = $2;
-                                            for(ast::ASTLocation decl : *$$)
-                                                ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
+                                            for(auto decl : *$$) ast_manager.GetDecl(decl).SetType(ast::Decl::kInt);
                                         }
     ;
 
@@ -158,24 +152,18 @@ ConstDef: IDENT '=' ConstExp                    { $$ = ast_manager.AddNode(new a
     | IDENT ArrayDimension '=' ConstArrayInit   { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $4, *$2, true)); }
     ;
 VarDef: IDENT                               { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1)); }
-    | IDENT '=' Exp                         { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $3, {})); }
+    | IDENT '=' Exp                         { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $3)); }
     | IDENT ArrayDimension                  { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, *$2)); }
     | IDENT ArrayDimension '=' ArrayInit    { $$ = ast_manager.AddNode(new ast::VarDecl(ast_manager, @$, $1, $4, *$2)); }
     ;
 
 ArrayDimension: '[' ConstExp ']'        { $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($2); }
-    | ArrayDimension '[' ConstExp ']'   { $$ = $1; $$ = new std::vector<ast::ASTLocation>(); $$->emplace_back($3); }
+    | ArrayDimension '[' ConstExp ']'   { $$ = $1; $$->emplace_back($3); }
     ;
 
-ConstArrayInit: '{' ConstInitList '}'   {
-                                            $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, *$2));
-                                            for(auto expr : *$2) ast_manager.GetNode(expr).SetParent($$);
-                                        }
+ConstArrayInit: '{' ConstInitList '}'       { $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, @$, *$2)); }
     ;
-ArrayInit: '{' InitList '}'             {
-                                            $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, *$2));
-                                            for(auto expr : *$2) ast_manager.GetNode(expr).SetParent($$);
-                                        }
+ArrayInit: '{' InitList '}'                 { $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, @$, *$2)); }
     ;
 
 ConstInitList:                              { $$ = new std::vector<ast::ASTLocation>(); }
@@ -187,19 +175,22 @@ InitList:                                   { $$ = new std::vector<ast::ASTLocat
     | InitList ',' InitItem                 { $$ = $1; $$->emplace_back($3); }
     ;
 
-ConstInitItem: ConstExp     { $$ = $1; }
-    | ConstArrayInit        { $$ = $1; }
+ConstInitItem: ConstExp         { $$ = $1; }
+    | '{' ConstInitList '}'     { $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, @$, *$2)); }
     ;
-InitItem: Exp               { $$ = $1; }
-    | ArrayInit             { $$ = $1; }
+InitItem: Exp                   { $$ = $1; }
+    | '{' InitList '}'          { $$ = ast_manager.AddNode(new ast::InitListExpr(ast_manager, @$, *$2)); }
     ;
 
 /* --------------- Function Definition --------------- */
 
-FuncDef: FuncType IDENT '(' FuncFParamList ')' Block    {
-                                                            $$ = ast_manager.AddNode(new ast::FunctionDecl(ast_manager, @$, $2, *$4, $6));
-                                                            ast_manager.GetDecl($$).SetType($1 ? ast::Decl::kVoid : ast::Decl::kInt);
-                                                        }
+FuncDef: FuncDecl Block     { ast_manager.GetNode($$).Cast<ast::FunctionDecl>().SetDef($2); }
+    ;
+
+FuncDecl: FuncType IDENT '(' FuncFParamList ')'     {
+                                                        $$ = ast_manager.AddNode(new ast::FunctionDecl(ast_manager, @$, $2, *$4));
+                                                        ast_manager.GetDecl($$).SetType($1 ? ast::Decl::kVoid : ast::Decl::kInt);
+                                                    }
     ;
 
 FuncType: "void"        { $$ = true; }
@@ -238,15 +229,11 @@ BlockItem : Decl        { $$ = ast_manager.AddNode(new ast::DeclStmt(ast_manager
     ;
 
 Stmt: ';'                   { $$ = ast_manager.AddNode(new ast::NullStmt(ast_manager, @$)); }
-    | Exp ';'               { $$ = $1; }
-    | LVal '=' Exp ';'      {
-                                $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAssign, $1, $3));
-                                ast_manager.GetNode($1).SetParent($$);
-                                ast_manager.GetNode($3).SetParent($$);
-                            }
+    | Exp ';'               { $$ = $1; ast_manager.GetNode($$).SetRange(@$); }
+    | LVal '=' Exp ';'      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAssign, $1, $3)); }
     | Block                 { $$ = $1; }
-    | "if" '(' Cond ')' Stmt %prec LOWER_THAN_ELSE      { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5)); }
-    | "if" '(' Cond ')' Stmt "else" Stmt                { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5, $7)); }
+    | "if" '(' Cond ')' Stmt %prec LOWER_THAN_ELSE  { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5)); }
+    | "if" '(' Cond ')' Stmt "else" Stmt            { $$ = ast_manager.AddNode(new ast::IfStmt(ast_manager, @$, $3, $5, $7)); }
     | "while" '(' Cond ')' Stmt     { $$ = ast_manager.AddNode(new ast::WhileStmt(ast_manager, @$, $3, $5)); }
     | "break" ';'                   { $$ = ast_manager.AddNode(new ast::BreakStmt(ast_manager, @$)); }
     | "continue" ';'                { $$ = ast_manager.AddNode(new ast::ContinueStmt(ast_manager, @$)); }
@@ -264,93 +251,26 @@ ArrayReference: '[' Exp ']'         { $$ = new std::vector<ast::ASTLocation>(); 
 
 /* --------------- Expression --------------- */
 
-Exp: '(' Exp ')'        {
-                            $$ = ast_manager.AddNode(new ast::ParenExpr(ast_manager, @$, $2));
-                            ast_manager.GetNode($2).SetParent($$);
-                        }
+Exp: '(' Exp ')'        { $$ = ast_manager.AddNode(new ast::ParenExpr(ast_manager, @$, $2)); }
     | LVal              { $$ = $1; }
     | NUMBER            { $$ = ast_manager.AddNode(new ast::IntegerLiteral(ast_manager, @$, $1)); }
-    | Exp '+' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAdd, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '-' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kSub, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '*' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kMul, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '/' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kDiv, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '%' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kRem, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | IDENT '(' FuncRParamList ')' %prec CALL   {
-                                                    $$ = ast_manager.AddNode(new ast::CallExpr(ast_manager, @$, $1, *$3));
-
-                                                }
-    | '+' Exp %prec PLUS    {
-                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kPlus, $2));
-                                ast_manager.GetNode($2).SetParent($$);
-                            }
-    | '-' Exp %prec MINUS   {
-                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kMinus, $2));
-                                ast_manager.GetNode($2).SetParent($$);
-                            }
-    | '!' Exp %prec NOT     {
-                                $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kNot, $2));
-                                ast_manager.GetNode($2).SetParent($$);
-                            }
-    | Exp "||" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kOr, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp "&&" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAnd, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp "==" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kEQ, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp "!=" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kNE, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '<' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLT, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp "<=" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLE, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp '>' Exp       {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGT, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
-    | Exp ">=" Exp      {
-                            $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGE, $1, $3));
-                            ast_manager.GetNode($1).SetParent($$);
-                            ast_manager.GetNode($3).SetParent($$);
-                        }
+    | Exp '+' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAdd, $1, $3)); }
+    | Exp '-' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kSub, $1, $3)); }
+    | Exp '*' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kMul, $1, $3)); }
+    | Exp '/' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kDiv, $1, $3)); }
+    | Exp '%' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kRem, $1, $3)); }
+    | IDENT '(' FuncRParamList ')' %prec CALL   { $$ = ast_manager.AddNode(new ast::CallExpr(ast_manager, @$, $1, *$3)); }
+    | '+' Exp %prec PLUS    { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kPlus, $2)); }
+    | '-' Exp %prec MINUS   { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kMinus, $2)); }
+    | '!' Exp %prec NOT     { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kNot, $2)); }
+    | Exp "||" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kOr, $1, $3)); }
+    | Exp "&&" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kAnd, $1, $3)); }
+    | Exp "==" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kEQ, $1, $3)); }
+    | Exp "!=" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kNE, $1, $3)); }
+    | Exp '<' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLT, $1, $3)); }
+    | Exp "<=" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kLE, $1, $3)); }
+    | Exp '>' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGT, $1, $3)); }
+    | Exp ">=" Exp      { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kGE, $1, $3)); }
     ;
 
 FuncRParamList:                 { $$ = new std::vector<ast::ASTLocation>(); }

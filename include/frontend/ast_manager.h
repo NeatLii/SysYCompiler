@@ -55,12 +55,12 @@ class InitListExpr;
 
 class ASTManager {
   public:
-    explicit ASTManager(const SourceManager &raw,
+    explicit ASTManager(SourceManager &raw,
                         const bool has_root = false,
-                        const ASTLocation root = 0)
+                        const ASTLocation root = 0) noexcept
         : raw(raw), has_root(has_root), root(root) {}
 
-    const SourceManager &GetSourceManager() const { return raw; }
+    SourceManager &GetSourceManager() const { return raw; }
 
     ASTLocation AddNode(ASTNode *node);
     ASTLocation AddNode(std::unique_ptr<ASTNode> &node);
@@ -79,12 +79,17 @@ class ASTManager {
     void Dump(std::ostream &ostream) const;
 
   private:
-    const SourceManager &raw;
+    SourceManager &raw;
     std::vector<std::unique_ptr<ASTNode>> node_table;
 
     bool has_root;
     ASTLocation root;
 };
+
+/*
+ * Only TranslationUnit and CompoundStmt will store ident.
+ * CompoundStmt also store FuncFParam.
+ */
 
 class IdentTable {
   public:
@@ -144,17 +149,17 @@ class ASTNode : public IdentTable {
     const ASTNodeKind kind;
 
     ASTNode(const ASTNodeKind kind,
-            const ASTManager &src,
-            const SourceRange range = {0, 0, 0, 0},
-            const bool has_loc = false,
-            const ASTLocation loc = 0,
+            ASTManager &src,
+            const SourceRange &range = {},
+            const bool has_location = false,
+            const ASTLocation location = 0,
             const bool has_parent = false,
             const ASTLocation parent = 0)
         : kind(kind)
         , src(src)
         , range(range)
-        , has_loc(has_loc)
-        , loc(loc)
+        , has_location(has_location)
+        , location(location)
         , has_parent(has_parent)
         , parent(parent) {}
     virtual ~ASTNode() = default;
@@ -170,44 +175,48 @@ class ASTNode : public IdentTable {
     bool IsStmt() const { return kStmt <= kind && kind <= kInitListExpr; }
     bool IsExpr() const { return kExpr <= kind && kind <= kInitListExpr; }
 
-    const ASTManager &GetASTManager() const { return src; }
-
-    void SetRange(const SourceRange range) { this->range = range; }
-    // void SetBegin(const TokenLocation loc) { range.begin = loc; }
-    // void SetEnd(const TokenLocation loc) { range.end = loc; }
-    SourceRange GetRange() const { return range; }
-    // TokenLocation GetBegin() const { return range.begin; }
-    // TokenLocation GetEnd() const { return range.end; }
-
-    bool HasLocation() const { return has_loc; }
-    void SetLocation(const ASTLocation loc) {
-        has_loc = true;
-        this->loc = loc;
+    template <typename T>
+    T &Cast() const {
+        return dynamic_cast<T &>(src.GetNode(location));
     }
-    ASTLocation GetLocation() const { return has_loc ? loc : 0; }
+
+    ASTManager &GetASTManager() const { return src; }
+    SourceManager &GetSourceManager() const { return src.GetSourceManager(); }
+
+    void SetRange(const SourceRange &range) { this->range = range; }
+    const SourceRange &GetRange() const { return range; }
+
+    bool HasLocation() const { return has_location; }
+    void SetLocation(const ASTLocation location) {
+        has_location = true;
+        this->location = location;
+    }
+    ASTLocation GetLocation() const { return location; }
 
     bool HasParent() const { return has_parent; }
     void SetParent(const ASTLocation parent) {
         has_parent = true;
         this->parent = parent;
     }
-    ASTLocation GetParent() const { return has_parent ? parent : 0; }
+    ASTLocation GetParent() const { return parent; }
 
+    // Binding childs' parent ot myself.
+    virtual void Link() = 0;
+
+    // Traverse, in order to find reference and calculate const values.
+    virtual void Visit() = 0;
+
+    // ast-dump
     virtual void Dump(std::ostream &ostream,
                       const std::string &indent,
                       bool is_last) const = 0;
 
-    template <typename T>
-    T &Cast() const {
-        return dynamic_cast<T &>(src.GetNode(loc));
-    }
-
   protected:
-    const ASTManager &src;
+    ASTManager &src;
     SourceRange range;
 
-    bool has_loc;
-    ASTLocation loc;
+    bool has_location;
+    ASTLocation location;
     bool has_parent;
     ASTLocation parent;
 
@@ -219,17 +228,23 @@ class ASTNode : public IdentTable {
 
 class TranslationUnit final : public ASTNode {
   public:
-    explicit TranslationUnit(const ASTManager &src)
-        : ASTNode(kTranslationUnit, src) {}
+    explicit TranslationUnit(ASTManager &src) : ASTNode(kTranslationUnit, src) {
+        BuiltIn();
+    }
 
     void AddDecl(ASTLocation loc);
     const std::vector<ASTLocation> &GetDeclList() const { return decl_list; }
     std::vector<ASTLocation>::size_type GetDeclNum() const {
         return decl_list.size();
     }
-    ASTLocation GetDeclAt(const std::vector<ASTLocation>::size_type index) {
+    ASTLocation GetDeclAt(
+        const std::vector<ASTLocation>::size_type index) const {
         return decl_list[index];
     }
+
+    void Link() override {}
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -237,6 +252,8 @@ class TranslationUnit final : public ASTNode {
 
   private:
     std::vector<ASTLocation> decl_list;
+
+    void BuiltIn();
 };
 
 class Decl : public ASTNode {
@@ -244,24 +261,26 @@ class Decl : public ASTNode {
     enum Type { kUndef, kVoid, kInt };
 
     Decl(const ASTNodeKind kind,
-         const ASTManager &src,
-         const SourceRange range,
+         ASTManager &src,
+         const SourceRange &range,
          const TokenLocation ident,
          const Type type = kUndef)
         : ASTNode(kind, src, range), ident(ident), type(type) {}
 
+    TokenLocation GetIdentLoc() const { return ident; }
     const Token &GetIdentToken() const {
         return src.GetSourceManager().GetToken(ident);
     }
     std::string GetIdentName() const {
         return src.GetSourceManager().GetTokenText(ident);
     }
-    SourceRange GetIdentRange() const {
+    const SourceRange &GetIdentRange() const {
         return src.GetSourceManager().GetTokenRange(ident);
     }
 
     void SetType(const Type type) { this->type = type; }
     Type GetType() const { return type; }
+
     virtual std::string TypeStr() const = 0;
 
   protected:
@@ -271,8 +290,8 @@ class Decl : public ASTNode {
 
 class VarDecl final : public Decl {
   public:
-    VarDecl(const ASTManager &src,
-            const SourceRange range,
+    VarDecl(ASTManager &src,
+            const SourceRange &range,
             const TokenLocation ident,
             std::vector<ASTLocation> arr_dim_list = {},
             const bool is_const = false)
@@ -281,8 +300,8 @@ class VarDecl final : public Decl {
         , init(0)
         , arr_dim_list(std::move(arr_dim_list))
         , is_const(is_const) {}
-    VarDecl(const ASTManager &src,
-            const SourceRange range,
+    VarDecl(ASTManager &src,
+            const SourceRange &range,
             const TokenLocation ident,
             const ASTLocation init,
             std::vector<ASTLocation> arr_dim_list = {},
@@ -295,8 +314,9 @@ class VarDecl final : public Decl {
 
     bool HasInit() const { return has_init; }
     const Expr &GetInit() const { return src.GetExpr(init); }
+    ASTLocation GetInitLoc() const { return init; }
     const InitListExpr &GetInitList() const {
-        return src.GetNode(loc).Cast<InitListExpr>();
+        return src.GetNode(init).Cast<InitListExpr>();
     }
 
     bool IsArray() const { return !arr_dim_list.empty(); }
@@ -316,13 +336,17 @@ class VarDecl final : public Decl {
 
     std::string TypeStr() const override;
 
+    void Link() override;
+
+    void Visit() override;
+
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
 
   private:
     const bool has_init;
-    const ASTLocation init;
+    ASTLocation init;
 
     const std::vector<ASTLocation> arr_dim_list;
     bool is_const;
@@ -330,8 +354,8 @@ class VarDecl final : public Decl {
 
 class ParamVarDecl final : public Decl {
   public:
-    ParamVarDecl(const ASTManager &src,
-                 const SourceRange range,
+    ParamVarDecl(ASTManager &src,
+                 const SourceRange &range,
                  const TokenLocation ident,
                  const bool is_ptr = false,
                  std::vector<ASTLocation> arr_dim_list = {})
@@ -355,6 +379,10 @@ class ParamVarDecl final : public Decl {
 
     std::string TypeStr() const override;
 
+    void Link() override;
+
+    void Visit() override;
+
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
@@ -366,19 +394,19 @@ class ParamVarDecl final : public Decl {
 
 class FunctionDecl final : public Decl {
   public:
-    FunctionDecl(const ASTManager &src,
-                 const SourceRange range,
+    FunctionDecl(ASTManager &src,
+                 const SourceRange &range,
                  const TokenLocation ident,
                  std::vector<ASTLocation> param_list = {})
         : Decl(kFunctionDecl, src, range, ident)
         , param_list(std::move(param_list))
         , has_def(false)
         , def(0) {}
-    FunctionDecl(const ASTManager &src,
-                 const SourceRange range,
+    FunctionDecl(ASTManager &src,
+                 const SourceRange &range,
                  const TokenLocation ident,
-                 std::vector<ASTLocation> param_list,
-                 const ASTLocation def)
+                 const ASTLocation def,
+                 std::vector<ASTLocation> param_list = {})
         : Decl(kFunctionDecl, src, range, ident)
         , param_list(std::move(param_list))
         , has_def(true)
@@ -394,11 +422,17 @@ class FunctionDecl final : public Decl {
     }
 
     bool HasDef() const { return has_def; }
+    void SetDef(ASTLocation def);
     const CompoundStmt &GetDef() const {
         return src.GetNode(def).Cast<CompoundStmt>();
     }
+    ASTLocation GetDefLoc() const { return def; }
 
     std::string TypeStr() const override;
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -406,20 +440,20 @@ class FunctionDecl final : public Decl {
 
   private:
     const std::vector<ASTLocation> param_list;
-    const bool has_def;
-    const ASTLocation def;
+    bool has_def;
+    ASTLocation def;
 };
 
 class Stmt : public ASTNode {
   public:
-    Stmt(const ASTNodeKind kind, const ASTManager &src, const SourceRange range)
+    Stmt(const ASTNodeKind kind, ASTManager &src, const SourceRange &range)
         : ASTNode(kind, src, range) {}
 };
 
 class CompoundStmt final : public Stmt {
   public:
-    CompoundStmt(const ASTManager &src,
-                 const SourceRange range,
+    CompoundStmt(ASTManager &src,
+                 const SourceRange &range,
                  std::vector<ASTLocation> stmt_list = {})
         : Stmt(kCompoundStmt, src, range), stmt_list(std::move(stmt_list)) {}
 
@@ -431,6 +465,10 @@ class CompoundStmt final : public Stmt {
         return src.GetStmt(stmt_list[index]).Cast<Stmt>();
     }
 
+    void Link() override;
+
+    void Visit() override;
+
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
@@ -441,8 +479,8 @@ class CompoundStmt final : public Stmt {
 
 class DeclStmt final : public Stmt {
   public:
-    DeclStmt(const ASTManager &src,
-             const SourceRange range,
+    DeclStmt(ASTManager &src,
+             const SourceRange &range,
              std::vector<ASTLocation> decl_list)
         : Stmt(kDeclStmt, src, range), decl_list(std::move(decl_list)) {}
 
@@ -455,6 +493,10 @@ class DeclStmt final : public Stmt {
         return src.GetNode(decl_list[index]).Cast<VarDecl>();
     }
 
+    void Link() override;
+
+    void Visit() override;
+
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
@@ -465,8 +507,12 @@ class DeclStmt final : public Stmt {
 
 class NullStmt final : public Stmt {
   public:
-    explicit NullStmt(const ASTManager &src, const SourceRange range)
+    explicit NullStmt(ASTManager &src, const SourceRange &range)
         : Stmt(kNullStmt, src, range) {}
+
+    void Link() override {}
+
+    void Visit() override {}
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -475,8 +521,8 @@ class NullStmt final : public Stmt {
 
 class IfStmt final : public Stmt {
   public:
-    IfStmt(const ASTManager &src,
-           const SourceRange range,
+    IfStmt(ASTManager &src,
+           const SourceRange &range,
            const ASTLocation cond,
            const ASTLocation then_stmt)
         : Stmt(kIfStmt, src, range)
@@ -484,8 +530,8 @@ class IfStmt final : public Stmt {
         , then_stmt(then_stmt)
         , has_else(false)
         , else_stmt(0) {}
-    IfStmt(const ASTManager &src,
-           const SourceRange range,
+    IfStmt(ASTManager &src,
+           const SourceRange &range,
            const ASTLocation cond,
            const ASTLocation then_stmt,
            const ASTLocation else_stmt)
@@ -496,8 +542,17 @@ class IfStmt final : public Stmt {
         , else_stmt(else_stmt) {}
 
     const Expr &GetCond() const { return src.GetExpr(cond); }
+    ASTLocation GetCondLoc() const { return cond; }
+
     const Stmt &GetThen() const { return src.GetStmt(then_stmt); }
+    ASTLocation GetThenLoc() const { return then_stmt; }
+
     const Stmt &GetElse() const { return src.GetStmt(else_stmt); }
+    ASTLocation GetElseLoc() const { return else_stmt; }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -512,14 +567,21 @@ class IfStmt final : public Stmt {
 
 class WhileStmt final : public Stmt {
   public:
-    WhileStmt(const ASTManager &src,
-              const SourceRange range,
+    WhileStmt(ASTManager &src,
+              const SourceRange &range,
               const ASTLocation cond,
               const ASTLocation body)
         : Stmt(kWhileStmt, src, range), cond(cond), body(body) {}
 
     const Expr &GetCond() const { return src.GetExpr(cond); }
+    ASTLocation GetCondLoc() const { return cond; }
+
     const Stmt &GetBody() const { return src.GetStmt(body); }
+    ASTLocation GetBodyLoc() const { return body; }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -532,8 +594,12 @@ class WhileStmt final : public Stmt {
 
 class ContinueStmt final : public Stmt {
   public:
-    explicit ContinueStmt(const ASTManager &src, const SourceRange range)
+    explicit ContinueStmt(ASTManager &src, const SourceRange &range)
         : Stmt(kContinueStmt, src, range) {}
+
+    void Link() override {}
+
+    void Visit() override {}
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -542,8 +608,12 @@ class ContinueStmt final : public Stmt {
 
 class BreakStmt final : public Stmt {
   public:
-    explicit BreakStmt(const ASTManager &src, const SourceRange range)
+    explicit BreakStmt(ASTManager &src, const SourceRange &range)
         : Stmt(kBreakStmt, src, range) {}
+
+    void Link() override {}
+
+    void Visit() override {}
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -552,16 +622,21 @@ class BreakStmt final : public Stmt {
 
 class ReturnStmt final : public Stmt {
   public:
-    ReturnStmt(const ASTManager &src, const SourceRange range)
+    ReturnStmt(ASTManager &src, const SourceRange &range)
         : Stmt(kReturnStmt, src, range), has_expr(false), expr(0) {}
-    ReturnStmt(const ASTManager &src,
-               const SourceRange range,
+    ReturnStmt(ASTManager &src,
+               const SourceRange &range,
                const ASTLocation expr)
         : Stmt(kReturnStmt, src, range), has_expr(true), expr(expr) {}
 
     bool HasExpr() const { return has_expr; }
 
     const Expr &GetExpr() const { return src.GetExpr(expr); }
+    ASTLocation GetExprLoc() const { return expr; }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -574,11 +649,11 @@ class ReturnStmt final : public Stmt {
 
 class Expr : public Stmt {
   public:
-    Expr(const ASTNodeKind kind, const ASTManager &src, const SourceRange range)
+    Expr(const ASTNodeKind kind, ASTManager &src, const SourceRange &range)
         : Stmt(kind, src, range), is_const(false), value(0) {}
     Expr(const ASTNodeKind kind,
-         const ASTManager &src,
-         const SourceRange range,
+         ASTManager &src,
+         const SourceRange &range,
          const int value)
         : Stmt(kind, src, range), is_const(true), value(value) {}
 
@@ -599,19 +674,37 @@ class Expr : public Stmt {
 
 class IntegerLiteral final : public Expr {
   public:
-    IntegerLiteral(const ASTManager &src, SourceRange range, const int value)
-        : Expr(kIntegerLiteral, src, range, value) {}
+    IntegerLiteral(ASTManager &src,
+                   const SourceRange &range,
+                   const int value,
+                   const bool is_filler = false)
+        : Expr(kIntegerLiteral, src, range, value), is_filler(is_filler) {}
+
+    void Link() override {}
+
+    void Visit() override {}
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
+
+  private:
+    const bool is_filler;
 };
 
 class ParenExpr final : public Expr {
   public:
-    ParenExpr(const ASTManager &src, SourceRange range, ASTLocation sub_expr);
+    ParenExpr(ASTManager &src,
+              const SourceRange &range,
+              const ASTLocation sub_expr)
+        : Expr(kParenExpr, src, range), sub_expr(sub_expr) {}
 
     const Expr &GetSubExpr() const { return src.GetExpr(sub_expr); }
+    ASTLocation GetSubExprLoc() const { return sub_expr; }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -623,13 +716,19 @@ class ParenExpr final : public Expr {
 
 class DeclRefExpr final : public Expr {
   public:
-    DeclRefExpr(const ASTManager &src,
-                SourceRange range,
-                TokenLocation ident,
+    DeclRefExpr(ASTManager &src,
+                const SourceRange &range,
+                const TokenLocation ident,
                 std::vector<ASTLocation> arr_dim_list = {},
-                bool has_ref = false,
-                ASTLocation ref = 0);
+                const bool has_ref = false,
+                const ASTLocation ref = 0)
+        : Expr(kDeclRefExpr, src, range)
+        , ident(ident)
+        , arr_dim_list(std::move(arr_dim_list))
+        , has_ref(has_ref)
+        , ref(ref) {}
 
+    TokenLocation GetIdentLoc() const { return ident; }
     const Token &GetIdentToken() const {
         return src.GetSourceManager().GetToken(ident);
     }
@@ -653,10 +752,13 @@ class DeclRefExpr final : public Expr {
     }
 
     bool HasRef() const { return has_ref; }
-    void SetRef(ASTLocation ref);
     const Decl &GetRef() const { return src.GetDecl(ref); }
 
     std::string TypeStr() const;
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -668,12 +770,15 @@ class DeclRefExpr final : public Expr {
 
     bool has_ref;
     ASTLocation ref;
+
+    void FindRef();
+    void CalculateValue();
 };
 
 class CallExpr final : public Expr {
   public:
-    CallExpr(const ASTManager &src,
-             const SourceRange range,
+    CallExpr(ASTManager &src,
+             const SourceRange &range,
              const TokenLocation ident,
              std::vector<ASTLocation> param_list = {},
              const bool has_ref = false,
@@ -684,6 +789,7 @@ class CallExpr final : public Expr {
         , has_ref(has_ref)
         , ref(ref) {}
 
+    TokenLocation GetIdentLoc() const { return ident; }
     const Token &GetIdentToken() const {
         return src.GetSourceManager().GetToken(ident);
     }
@@ -703,15 +809,15 @@ class CallExpr final : public Expr {
     }
 
     bool HasRef() const { return has_ref; }
-    void SetRef(const ASTLocation ref) {
-        has_ref = true;
-        this->ref = ref;
-    }
     const FunctionDecl &GetRef() const {
         return src.GetNode(ref).Cast<const FunctionDecl &>();
     }
 
     std::string TypeStr() const;
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -723,6 +829,8 @@ class CallExpr final : public Expr {
 
     bool has_ref;
     ASTLocation ref;
+
+    void FindRef();
 };
 
 class BinaryOperator final : public Expr {
@@ -748,14 +856,27 @@ class BinaryOperator final : public Expr {
     };
     const BinaryOpKind op_code;
 
-    BinaryOperator(const ASTManager &src,
-                   SourceRange range,
-                   BinaryOpKind op_code,
-                   ASTLocation LHS,
-                   ASTLocation RHS);
+    BinaryOperator(ASTManager &src,
+                   const SourceRange &range,
+                   const BinaryOpKind op_code,
+                   const ASTLocation LHS,
+                   const ASTLocation RHS)
+        : Expr(kBinaryOperator, src, range)
+        , op_code(op_code)
+        , LHS(LHS)
+        , RHS(RHS) {
+        CheckOp();
+    }
 
     const Expr &GetLHS() const { return src.GetExpr(LHS); }
+    ASTLocation GetLHSLoc() const { return LHS; }
+
     const Expr &GetRHS() const { return src.GetExpr(RHS); }
+    ASTLocation GetRHSLoc() const { return RHS; }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -764,6 +885,9 @@ class BinaryOperator final : public Expr {
   private:
     const ASTLocation LHS;
     const ASTLocation RHS;
+
+    void CheckOp() const;
+    void CalculateValue();
 };
 
 class UnaryOperator final : public Expr {
@@ -771,12 +895,22 @@ class UnaryOperator final : public Expr {
     enum UnaryOpKind { kPlus, kMinus, kNot };
     const UnaryOpKind op_code;
 
-    UnaryOperator(const ASTManager &src,
-                  SourceRange range,
-                  UnaryOpKind op_code,
-                  ASTLocation sub_expr);
+    UnaryOperator(ASTManager &src,
+                  const SourceRange &range,
+                  const UnaryOpKind op_code,
+                  const ASTLocation sub_expr)
+        : Expr(kUnaryOperator, src, range)
+        , op_code(op_code)
+        , sub_expr(sub_expr) {
+        CheckOp();
+    }
 
+    ASTLocation GetSubExprLoc() const { return sub_expr; }
     const Expr &GetSubExpr() const { return src.GetExpr(sub_expr); }
+
+    void Link() override;
+
+    void Visit() override;
 
     void Dump(std::ostream &ostream,
               const std::string &indent,
@@ -784,11 +918,22 @@ class UnaryOperator final : public Expr {
 
   private:
     const ASTLocation sub_expr;
+
+    void CheckOp() const;
+    void CalculateValue();
 };
 
 class InitListExpr final : public Expr {
   public:
-    InitListExpr(const ASTManager &src, std::vector<ASTLocation> list);
+    InitListExpr(ASTManager &src,
+                 const SourceRange &range,
+                 std::vector<ASTLocation> init_list = {},
+                 std::vector<int> format = {},
+                 const bool is_filler = false)
+        : Expr(kInitListExpr, src, range)
+        , init_list(std::move(init_list))
+        , format(std::move(format))
+        , is_filler(is_filler) {}
 
     const std::vector<ASTLocation> &GetInitList() const { return init_list; }
     std::vector<ASTLocation>::size_type GetInitNum() const {
@@ -798,12 +943,35 @@ class InitListExpr final : public Expr {
         return src.GetExpr(init_list[index]);
     }
 
+    static int GetInitValue(const ASTManager &src,
+                            const InitListExpr &target,
+                            const std::vector<ASTLocation> &index);
+
+    void SetFormat(const std::vector<int> &format) { this->format = format; }
+    const std::vector<int> &GetFormat() const { return format; }
+
+    std::string TypeStr() const;
+
+    void Link() override;
+
+    void Visit() override;
+
     void Dump(std::ostream &ostream,
               const std::string &indent,
               bool is_last) const override;
 
+    static ASTLocation Format(ASTManager &src,
+                              const SourceRange &range,
+                              const std::vector<ASTLocation> &list,
+                              const std::vector<int> &format);
+
   private:
-    const std::vector<ASTLocation> init_list;
+    std::vector<ASTLocation> init_list;
+
+    std::vector<int> format;
+    const bool is_filler;
+
+    void CalculateValue();
 };
 
 }  // namespace ast

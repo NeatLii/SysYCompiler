@@ -28,12 +28,12 @@ Grammar
    15       | IDENT ArrayDimension
    16       | IDENT ArrayDimension '=' ArrayInit
 
-   17 ArrayDimension: '[' ConstExp ']'
-   18               | ArrayDimension '[' ConstExp ']'
+   17 ConstArrayInit: '{' ConstInitList '}'
 
-   19 ConstArrayInit: '{' ConstInitList '}'
+   18 ArrayInit: '{' InitList '}'
 
-   20 ArrayInit: '{' InitList '}'
+   19 ArrayDimension: '[' ConstExp ']'
+   20               | ArrayDimension '[' ConstExp ']'
 
    21 ConstInitList: %empty
    22              | ConstInitItem
@@ -44,10 +44,10 @@ Grammar
    26         | InitList ',' InitItem
 
    27 ConstInitItem: ConstExp
-   28              | ConstArrayInit
+   28              | '{' ConstInitList '}'
 
    29 InitItem: Exp
-   30         | ArrayInit
+   30         | '{' InitList '}'
 
    31 FuncDef: FuncType IDENT '(' FuncFParamList ')' Block
 
@@ -134,10 +134,10 @@ Terminals, with rules where they appear
     '<' (60) 76
     '=' (61) 11 12 14 16 47
     '>' (62) 78
-    '[' (91) 17 18 38 39 58 59
-    ']' (93) 17 18 38 39 58 59
-    '{' (123) 19 20 40
-    '}' (125) 19 20 40
+    '[' (91) 19 20 38 39 58 59
+    ']' (93) 19 20 38 39 58 59
+    '{' (123) 17 18 28 30 40
+    '}' (125) 17 18 28 30 40
     error (256)
     "const" (258) 4
     "void" (259) 32
@@ -188,21 +188,21 @@ Nonterminals, with rules where they appear
     VarDef (49)
         on left: 13 14 15 16
         on right: 9 10
-    ArrayDimension (50)
-        on left: 17 18
-        on right: 12 15 16 18 39
-    ConstArrayInit (51)
-        on left: 19
-        on right: 12 28
-    ArrayInit (52)
-        on left: 20
-        on right: 16 30
+    ConstArrayInit (50)
+        on left: 17
+        on right: 12
+    ArrayInit (51)
+        on left: 18
+        on right: 16
+    ArrayDimension (52)
+        on left: 19 20
+        on right: 12 15 16 20 39
     ConstInitList (53)
         on left: 21 22 23
-        on right: 19 23
+        on right: 17 23 28
     InitList (54)
         on left: 24 25 26
-        on right: 20 26
+        on right: 18 26 30
     ConstInitItem (55)
         on left: 27 28
         on right: 22 23
@@ -247,7 +247,7 @@ Nonterminals, with rules where they appear
         on right: 68 82
     ConstExp (69)
         on left: 83
-        on right: 11 17 18 27
+        on right: 11 19 20 27
     Cond (70)
         on left: 84
         on right: 49 50 51
@@ -435,7 +435,7 @@ State 18
 
 State 19
 
-   17 ArrayDimension: '[' . ConstExp ']'
+   19 ArrayDimension: '[' . ConstExp ']'
 
     IDENT   shift, and go to state 28
     NUMBER  shift, and go to state 29
@@ -453,7 +453,7 @@ State 20
 
    15 VarDef: IDENT ArrayDimension .
    16       | IDENT ArrayDimension . '=' ArrayInit
-   18 ArrayDimension: ArrayDimension . '[' ConstExp ']'
+   20 ArrayDimension: ArrayDimension . '[' ConstExp ']'
 
     '='  shift, and go to state 38
     '['  shift, and go to state 39
@@ -509,7 +509,7 @@ State 24
 State 25
 
    12 ConstDef: IDENT ArrayDimension . '=' ConstArrayInit
-   18 ArrayDimension: ArrayDimension . '[' ConstExp ']'
+   20 ArrayDimension: ArrayDimension . '[' ConstExp ']'
 
     '='  shift, and go to state 45
     '['  shift, and go to state 39
@@ -689,7 +689,7 @@ State 36
 
 State 37
 
-   17 ArrayDimension: '[' ConstExp . ']'
+   19 ArrayDimension: '[' ConstExp . ']'
 
     ']'  shift, and go to state 67
 
@@ -705,7 +705,7 @@ State 38
 
 State 39
 
-   18 ArrayDimension: ArrayDimension '[' . ConstExp ']'
+   20 ArrayDimension: ArrayDimension '[' . ConstExp ']'
 
     IDENT   shift, and go to state 28
     NUMBER  shift, and go to state 29
@@ -1107,30 +1107,29 @@ State 66
 
 State 67
 
-   17 ArrayDimension: '[' ConstExp ']' .
+   19 ArrayDimension: '[' ConstExp ']' .
 
-    $default  reduce using rule 17 (ArrayDimension)
+    $default  reduce using rule 19 (ArrayDimension)
 
 
 State 68
 
-   20 ArrayInit: '{' . InitList '}'
+   18 ArrayInit: '{' . InitList '}'
 
     IDENT   shift, and go to state 28
     NUMBER  shift, and go to state 29
     '+'     shift, and go to state 30
     '-'     shift, and go to state 31
-    '{'     shift, and go to state 68
+    '{'     shift, and go to state 94
     '('     shift, and go to state 32
     '!'     shift, and go to state 33
 
     $default  reduce using rule 24 (InitList)
 
-    ArrayInit  go to state 94
-    InitList   go to state 95
-    InitItem   go to state 96
-    LVal       go to state 34
-    Exp        go to state 97
+    InitList  go to state 95
+    InitItem  go to state 96
+    LVal      go to state 34
+    Exp       go to state 97
 
 
 State 69
@@ -1142,7 +1141,7 @@ State 69
 
 State 70
 
-   18 ArrayDimension: ArrayDimension '[' ConstExp . ']'
+   20 ArrayDimension: ArrayDimension '[' ConstExp . ']'
 
     ']'  shift, and go to state 98
 
@@ -1179,24 +1178,23 @@ State 73
 
 State 74
 
-   19 ConstArrayInit: '{' . ConstInitList '}'
+   17 ConstArrayInit: '{' . ConstInitList '}'
 
     IDENT   shift, and go to state 28
     NUMBER  shift, and go to state 29
     '+'     shift, and go to state 30
     '-'     shift, and go to state 31
-    '{'     shift, and go to state 74
+    '{'     shift, and go to state 103
     '('     shift, and go to state 32
     '!'     shift, and go to state 33
 
     $default  reduce using rule 21 (ConstInitList)
 
-    ConstArrayInit  go to state 103
-    ConstInitList   go to state 104
-    ConstInitItem   go to state 105
-    LVal            go to state 34
-    Exp             go to state 36
-    ConstExp        go to state 106
+    ConstInitList  go to state 104
+    ConstInitItem  go to state 105
+    LVal           go to state 34
+    Exp            go to state 36
+    ConstExp       go to state 106
 
 
 State 75
@@ -1643,18 +1641,31 @@ State 93
 
 State 94
 
-   30 InitItem: ArrayInit .
+   30 InitItem: '{' . InitList '}'
 
-    $default  reduce using rule 30 (InitItem)
+    IDENT   shift, and go to state 28
+    NUMBER  shift, and go to state 29
+    '+'     shift, and go to state 30
+    '-'     shift, and go to state 31
+    '{'     shift, and go to state 94
+    '('     shift, and go to state 32
+    '!'     shift, and go to state 33
+
+    $default  reduce using rule 24 (InitList)
+
+    InitList  go to state 111
+    InitItem  go to state 96
+    LVal      go to state 34
+    Exp       go to state 97
 
 
 State 95
 
-   20 ArrayInit: '{' InitList . '}'
+   18 ArrayInit: '{' InitList . '}'
    26 InitList: InitList . ',' InitItem
 
-    ','  shift, and go to state 111
-    '}'  shift, and go to state 112
+    ','  shift, and go to state 112
+    '}'  shift, and go to state 113
 
 
 State 96
@@ -1700,9 +1711,9 @@ State 97
 
 State 98
 
-   18 ArrayDimension: ArrayDimension '[' ConstExp ']' .
+   20 ArrayDimension: ArrayDimension '[' ConstExp ']' .
 
-    $default  reduce using rule 18 (ArrayDimension)
+    $default  reduce using rule 20 (ArrayDimension)
 
 
 State 99
@@ -1710,7 +1721,7 @@ State 99
    38 FuncFParam: BType IDENT '[' . ']'
    39           | BType IDENT '[' . ']' ArrayDimension
 
-    ']'  shift, and go to state 113
+    ']'  shift, and go to state 114
 
 
 State 100
@@ -1726,7 +1737,7 @@ State 101
 
     $default  reduce using rule 41 (BlockItemList)
 
-    BlockItemList  go to state 114
+    BlockItemList  go to state 115
 
 
 State 102
@@ -1738,18 +1749,32 @@ State 102
 
 State 103
 
-   28 ConstInitItem: ConstArrayInit .
+   28 ConstInitItem: '{' . ConstInitList '}'
 
-    $default  reduce using rule 28 (ConstInitItem)
+    IDENT   shift, and go to state 28
+    NUMBER  shift, and go to state 29
+    '+'     shift, and go to state 30
+    '-'     shift, and go to state 31
+    '{'     shift, and go to state 103
+    '('     shift, and go to state 32
+    '!'     shift, and go to state 33
+
+    $default  reduce using rule 21 (ConstInitList)
+
+    ConstInitList  go to state 116
+    ConstInitItem  go to state 105
+    LVal           go to state 34
+    Exp            go to state 36
+    ConstExp       go to state 106
 
 
 State 104
 
-   19 ConstArrayInit: '{' ConstInitList . '}'
+   17 ConstArrayInit: '{' ConstInitList . '}'
    23 ConstInitList: ConstInitList . ',' ConstInitItem
 
-    ','  shift, and go to state 115
-    '}'  shift, and go to state 116
+    ','  shift, and go to state 117
+    '}'  shift, and go to state 118
 
 
 State 105
@@ -1785,7 +1810,7 @@ State 108
     '!'     shift, and go to state 33
 
     LVal  go to state 34
-    Exp   go to state 117
+    Exp   go to state 119
 
 
 State 109
@@ -1825,10 +1850,19 @@ State 110
     '*'   shift, and go to state 64
     '/'   shift, and go to state 65
     '%'   shift, and go to state 66
-    ']'   shift, and go to state 118
+    ']'   shift, and go to state 120
 
 
 State 111
+
+   26 InitList: InitList . ',' InitItem
+   30 InitItem: '{' InitList . '}'
+
+    ','  shift, and go to state 112
+    '}'  shift, and go to state 121
+
+
+State 112
 
    26 InitList: InitList ',' . InitItem
 
@@ -1836,24 +1870,23 @@ State 111
     NUMBER  shift, and go to state 29
     '+'     shift, and go to state 30
     '-'     shift, and go to state 31
-    '{'     shift, and go to state 68
+    '{'     shift, and go to state 94
     '('     shift, and go to state 32
     '!'     shift, and go to state 33
 
-    ArrayInit  go to state 94
-    InitItem   go to state 119
-    LVal       go to state 34
-    Exp        go to state 97
-
-
-State 112
-
-   20 ArrayInit: '{' InitList '}' .
-
-    $default  reduce using rule 20 (ArrayInit)
+    InitItem  go to state 122
+    LVal      go to state 34
+    Exp       go to state 97
 
 
 State 113
+
+   18 ArrayInit: '{' InitList '}' .
+
+    $default  reduce using rule 18 (ArrayInit)
+
+
+State 114
 
    38 FuncFParam: BType IDENT '[' ']' .
    39           | BType IDENT '[' ']' . ArrayDimension
@@ -1862,41 +1895,50 @@ State 113
 
     $default  reduce using rule 38 (FuncFParam)
 
-    ArrayDimension  go to state 120
+    ArrayDimension  go to state 123
 
 
-State 114
+State 115
 
    40 Block: '{' BlockItemList . '}'
    42 BlockItemList: BlockItemList . BlockItem
 
     "const"     shift, and go to state 3
     "int"       shift, and go to state 5
-    "if"        shift, and go to state 121
-    "while"     shift, and go to state 122
-    "break"     shift, and go to state 123
-    "continue"  shift, and go to state 124
-    "return"    shift, and go to state 125
+    "if"        shift, and go to state 124
+    "while"     shift, and go to state 125
+    "break"     shift, and go to state 126
+    "continue"  shift, and go to state 127
+    "return"    shift, and go to state 128
     IDENT       shift, and go to state 28
     NUMBER      shift, and go to state 29
     '+'         shift, and go to state 30
     '-'         shift, and go to state 31
-    ';'         shift, and go to state 126
+    ';'         shift, and go to state 129
     '{'         shift, and go to state 101
-    '}'         shift, and go to state 127
+    '}'         shift, and go to state 130
     '('         shift, and go to state 32
     '!'         shift, and go to state 33
 
-    Decl       go to state 128
-    BType      go to state 129
-    Block      go to state 130
-    BlockItem  go to state 131
-    Stmt       go to state 132
-    LVal       go to state 133
-    Exp        go to state 134
+    Decl       go to state 131
+    BType      go to state 132
+    Block      go to state 133
+    BlockItem  go to state 134
+    Stmt       go to state 135
+    LVal       go to state 136
+    Exp        go to state 137
 
 
-State 115
+State 116
+
+   23 ConstInitList: ConstInitList . ',' ConstInitItem
+   28 ConstInitItem: '{' ConstInitList . '}'
+
+    ','  shift, and go to state 117
+    '}'  shift, and go to state 138
+
+
+State 117
 
    23 ConstInitList: ConstInitList ',' . ConstInitItem
 
@@ -1904,25 +1946,24 @@ State 115
     NUMBER  shift, and go to state 29
     '+'     shift, and go to state 30
     '-'     shift, and go to state 31
-    '{'     shift, and go to state 74
+    '{'     shift, and go to state 103
     '('     shift, and go to state 32
     '!'     shift, and go to state 33
 
-    ConstArrayInit  go to state 103
-    ConstInitItem   go to state 135
-    LVal            go to state 34
-    Exp             go to state 36
-    ConstExp        go to state 106
+    ConstInitItem  go to state 139
+    LVal           go to state 34
+    Exp            go to state 36
+    ConstExp       go to state 106
 
 
-State 116
+State 118
 
-   19 ConstArrayInit: '{' ConstInitList '}' .
+   17 ConstArrayInit: '{' ConstInitList '}' .
 
-    $default  reduce using rule 19 (ConstArrayInit)
+    $default  reduce using rule 17 (ConstArrayInit)
 
 
-State 117
+State 119
 
    63 Exp: Exp . '+' Exp
    64    | Exp . '-' Exp
@@ -1956,23 +1997,30 @@ State 117
     $default  reduce using rule 82 (FuncRParamList)
 
 
-State 118
+State 120
 
    59 ArrayReference: ArrayReference '[' Exp ']' .
 
     $default  reduce using rule 59 (ArrayReference)
 
 
-State 119
+State 121
+
+   30 InitItem: '{' InitList '}' .
+
+    $default  reduce using rule 30 (InitItem)
+
+
+State 122
 
    26 InitList: InitList ',' InitItem .
 
     $default  reduce using rule 26 (InitList)
 
 
-State 120
+State 123
 
-   18 ArrayDimension: ArrayDimension . '[' ConstExp ']'
+   20 ArrayDimension: ArrayDimension . '[' ConstExp ']'
    39 FuncFParam: BType IDENT '[' ']' ArrayDimension .
 
     '['  shift, and go to state 39
@@ -1980,36 +2028,36 @@ State 120
     $default  reduce using rule 39 (FuncFParam)
 
 
-State 121
+State 124
 
    49 Stmt: "if" . '(' Cond ')' Stmt
    50     | "if" . '(' Cond ')' Stmt "else" Stmt
 
-    '('  shift, and go to state 136
-
-
-State 122
-
-   51 Stmt: "while" . '(' Cond ')' Stmt
-
-    '('  shift, and go to state 137
-
-
-State 123
-
-   52 Stmt: "break" . ';'
-
-    ';'  shift, and go to state 138
-
-
-State 124
-
-   53 Stmt: "continue" . ';'
-
-    ';'  shift, and go to state 139
+    '('  shift, and go to state 140
 
 
 State 125
+
+   51 Stmt: "while" . '(' Cond ')' Stmt
+
+    '('  shift, and go to state 141
+
+
+State 126
+
+   52 Stmt: "break" . ';'
+
+    ';'  shift, and go to state 142
+
+
+State 127
+
+   53 Stmt: "continue" . ';'
+
+    ';'  shift, and go to state 143
+
+
+State 128
 
    54 Stmt: "return" . ';'
    55     | "return" . Exp ';'
@@ -2018,36 +2066,36 @@ State 125
     NUMBER  shift, and go to state 29
     '+'     shift, and go to state 30
     '-'     shift, and go to state 31
-    ';'     shift, and go to state 140
+    ';'     shift, and go to state 144
     '('     shift, and go to state 32
     '!'     shift, and go to state 33
 
     LVal  go to state 34
-    Exp   go to state 141
+    Exp   go to state 145
 
 
-State 126
+State 129
 
    45 Stmt: ';' .
 
     $default  reduce using rule 45 (Stmt)
 
 
-State 127
+State 130
 
    40 Block: '{' BlockItemList '}' .
 
     $default  reduce using rule 40 (Block)
 
 
-State 128
+State 131
 
    43 BlockItem: Decl .
 
     $default  reduce using rule 43 (BlockItem)
 
 
-State 129
+State 132
 
     5 Decl: BType . VarDefList ';'
 
@@ -2057,134 +2105,40 @@ State 129
     VarDef      go to state 13
 
 
-State 130
+State 133
 
    48 Stmt: Block .
 
     $default  reduce using rule 48 (Stmt)
 
 
-State 131
+State 134
 
    42 BlockItemList: BlockItemList BlockItem .
 
     $default  reduce using rule 42 (BlockItemList)
 
 
-State 132
+State 135
 
    44 BlockItem: Stmt .
 
     $default  reduce using rule 44 (BlockItem)
 
 
-State 133
+State 136
 
    47 Stmt: LVal . '=' Exp ';'
    61 Exp: LVal .
 
-    '='  shift, and go to state 142
+    '='  shift, and go to state 146
 
     $default  reduce using rule 61 (Exp)
 
 
-State 134
-
-   46 Stmt: Exp . ';'
-   63 Exp: Exp . '+' Exp
-   64    | Exp . '-' Exp
-   65    | Exp . '*' Exp
-   66    | Exp . '/' Exp
-   67    | Exp . '%' Exp
-   72    | Exp . "||" Exp
-   73    | Exp . "&&" Exp
-   74    | Exp . "==" Exp
-   75    | Exp . "!=" Exp
-   76    | Exp . '<' Exp
-   77    | Exp . "<=" Exp
-   78    | Exp . '>' Exp
-   79    | Exp . ">=" Exp
-
-    "||"  shift, and go to state 54
-    "&&"  shift, and go to state 55
-    "=="  shift, and go to state 56
-    "!="  shift, and go to state 57
-    "<="  shift, and go to state 58
-    ">="  shift, and go to state 59
-    '<'   shift, and go to state 60
-    '>'   shift, and go to state 61
-    '+'   shift, and go to state 62
-    '-'   shift, and go to state 63
-    '*'   shift, and go to state 64
-    '/'   shift, and go to state 65
-    '%'   shift, and go to state 66
-    ';'   shift, and go to state 143
-
-
-State 135
-
-   23 ConstInitList: ConstInitList ',' ConstInitItem .
-
-    $default  reduce using rule 23 (ConstInitList)
-
-
-State 136
-
-   49 Stmt: "if" '(' . Cond ')' Stmt
-   50     | "if" '(' . Cond ')' Stmt "else" Stmt
-
-    IDENT   shift, and go to state 28
-    NUMBER  shift, and go to state 29
-    '+'     shift, and go to state 30
-    '-'     shift, and go to state 31
-    '('     shift, and go to state 32
-    '!'     shift, and go to state 33
-
-    LVal  go to state 34
-    Exp   go to state 144
-    Cond  go to state 145
-
-
 State 137
 
-   51 Stmt: "while" '(' . Cond ')' Stmt
-
-    IDENT   shift, and go to state 28
-    NUMBER  shift, and go to state 29
-    '+'     shift, and go to state 30
-    '-'     shift, and go to state 31
-    '('     shift, and go to state 32
-    '!'     shift, and go to state 33
-
-    LVal  go to state 34
-    Exp   go to state 144
-    Cond  go to state 146
-
-
-State 138
-
-   52 Stmt: "break" ';' .
-
-    $default  reduce using rule 52 (Stmt)
-
-
-State 139
-
-   53 Stmt: "continue" ';' .
-
-    $default  reduce using rule 53 (Stmt)
-
-
-State 140
-
-   54 Stmt: "return" ';' .
-
-    $default  reduce using rule 54 (Stmt)
-
-
-State 141
-
-   55 Stmt: "return" Exp . ';'
+   46 Stmt: Exp . ';'
    63 Exp: Exp . '+' Exp
    64    | Exp . '-' Exp
    65    | Exp . '*' Exp
@@ -2215,7 +2169,108 @@ State 141
     ';'   shift, and go to state 147
 
 
+State 138
+
+   28 ConstInitItem: '{' ConstInitList '}' .
+
+    $default  reduce using rule 28 (ConstInitItem)
+
+
+State 139
+
+   23 ConstInitList: ConstInitList ',' ConstInitItem .
+
+    $default  reduce using rule 23 (ConstInitList)
+
+
+State 140
+
+   49 Stmt: "if" '(' . Cond ')' Stmt
+   50     | "if" '(' . Cond ')' Stmt "else" Stmt
+
+    IDENT   shift, and go to state 28
+    NUMBER  shift, and go to state 29
+    '+'     shift, and go to state 30
+    '-'     shift, and go to state 31
+    '('     shift, and go to state 32
+    '!'     shift, and go to state 33
+
+    LVal  go to state 34
+    Exp   go to state 148
+    Cond  go to state 149
+
+
+State 141
+
+   51 Stmt: "while" '(' . Cond ')' Stmt
+
+    IDENT   shift, and go to state 28
+    NUMBER  shift, and go to state 29
+    '+'     shift, and go to state 30
+    '-'     shift, and go to state 31
+    '('     shift, and go to state 32
+    '!'     shift, and go to state 33
+
+    LVal  go to state 34
+    Exp   go to state 148
+    Cond  go to state 150
+
+
 State 142
+
+   52 Stmt: "break" ';' .
+
+    $default  reduce using rule 52 (Stmt)
+
+
+State 143
+
+   53 Stmt: "continue" ';' .
+
+    $default  reduce using rule 53 (Stmt)
+
+
+State 144
+
+   54 Stmt: "return" ';' .
+
+    $default  reduce using rule 54 (Stmt)
+
+
+State 145
+
+   55 Stmt: "return" Exp . ';'
+   63 Exp: Exp . '+' Exp
+   64    | Exp . '-' Exp
+   65    | Exp . '*' Exp
+   66    | Exp . '/' Exp
+   67    | Exp . '%' Exp
+   72    | Exp . "||" Exp
+   73    | Exp . "&&" Exp
+   74    | Exp . "==" Exp
+   75    | Exp . "!=" Exp
+   76    | Exp . '<' Exp
+   77    | Exp . "<=" Exp
+   78    | Exp . '>' Exp
+   79    | Exp . ">=" Exp
+
+    "||"  shift, and go to state 54
+    "&&"  shift, and go to state 55
+    "=="  shift, and go to state 56
+    "!="  shift, and go to state 57
+    "<="  shift, and go to state 58
+    ">="  shift, and go to state 59
+    '<'   shift, and go to state 60
+    '>'   shift, and go to state 61
+    '+'   shift, and go to state 62
+    '-'   shift, and go to state 63
+    '*'   shift, and go to state 64
+    '/'   shift, and go to state 65
+    '%'   shift, and go to state 66
+    ';'   shift, and go to state 151
+
+
+State 146
 
    47 Stmt: LVal '=' . Exp ';'
 
@@ -2227,17 +2282,17 @@ State 142
     '!'     shift, and go to state 33
 
     LVal  go to state 34
-    Exp   go to state 148
+    Exp   go to state 152
 
 
-State 143
+State 147
 
    46 Stmt: Exp ';' .
 
     $default  reduce using rule 46 (Stmt)
 
 
-State 144
+State 148
 
    63 Exp: Exp . '+' Exp
    64    | Exp . '-' Exp
@@ -2271,29 +2326,29 @@ State 144
     $default  reduce using rule 84 (Cond)
 
 
-State 145
+State 149
 
    49 Stmt: "if" '(' Cond . ')' Stmt
    50     | "if" '(' Cond . ')' Stmt "else" Stmt
 
-    ')'  shift, and go to state 149
+    ')'  shift, and go to state 153
 
 
-State 146
+State 150
 
    51 Stmt: "while" '(' Cond . ')' Stmt
 
-    ')'  shift, and go to state 150
+    ')'  shift, and go to state 154
 
 
-State 147
+State 151
 
    55 Stmt: "return" Exp ';' .
 
     $default  reduce using rule 55 (Stmt)
 
 
-State 148
+State 152
 
    47 Stmt: LVal '=' Exp . ';'
    63 Exp: Exp . '+' Exp
@@ -2323,107 +2378,107 @@ State 148
     '*'   shift, and go to state 64
     '/'   shift, and go to state 65
     '%'   shift, and go to state 66
-    ';'   shift, and go to state 151
+    ';'   shift, and go to state 155
 
 
-State 149
+State 153
 
    49 Stmt: "if" '(' Cond ')' . Stmt
    50     | "if" '(' Cond ')' . Stmt "else" Stmt
 
-    "if"        shift, and go to state 121
-    "while"     shift, and go to state 122
-    "break"     shift, and go to state 123
-    "continue"  shift, and go to state 124
-    "return"    shift, and go to state 125
+    "if"        shift, and go to state 124
+    "while"     shift, and go to state 125
+    "break"     shift, and go to state 126
+    "continue"  shift, and go to state 127
+    "return"    shift, and go to state 128
     IDENT       shift, and go to state 28
     NUMBER      shift, and go to state 29
     '+'         shift, and go to state 30
     '-'         shift, and go to state 31
-    ';'         shift, and go to state 126
+    ';'         shift, and go to state 129
     '{'         shift, and go to state 101
     '('         shift, and go to state 32
     '!'         shift, and go to state 33
 
-    Block  go to state 130
-    Stmt   go to state 152
-    LVal   go to state 133
-    Exp    go to state 134
+    Block  go to state 133
+    Stmt   go to state 156
+    LVal   go to state 136
+    Exp    go to state 137
 
 
-State 150
+State 154
 
    51 Stmt: "while" '(' Cond ')' . Stmt
 
-    "if"        shift, and go to state 121
-    "while"     shift, and go to state 122
-    "break"     shift, and go to state 123
-    "continue"  shift, and go to state 124
-    "return"    shift, and go to state 125
+    "if"        shift, and go to state 124
+    "while"     shift, and go to state 125
+    "break"     shift, and go to state 126
+    "continue"  shift, and go to state 127
+    "return"    shift, and go to state 128
     IDENT       shift, and go to state 28
     NUMBER      shift, and go to state 29
     '+'         shift, and go to state 30
     '-'         shift, and go to state 31
-    ';'         shift, and go to state 126
+    ';'         shift, and go to state 129
     '{'         shift, and go to state 101
     '('         shift, and go to state 32
     '!'         shift, and go to state 33
 
-    Block  go to state 130
-    Stmt   go to state 153
-    LVal   go to state 133
-    Exp    go to state 134
+    Block  go to state 133
+    Stmt   go to state 157
+    LVal   go to state 136
+    Exp    go to state 137
 
 
-State 151
+State 155
 
    47 Stmt: LVal '=' Exp ';' .
 
     $default  reduce using rule 47 (Stmt)
 
 
-State 152
+State 156
 
    49 Stmt: "if" '(' Cond ')' Stmt .
    50     | "if" '(' Cond ')' Stmt . "else" Stmt
 
-    "else"  shift, and go to state 154
+    "else"  shift, and go to state 158
 
     $default  reduce using rule 49 (Stmt)
 
 
-State 153
+State 157
 
    51 Stmt: "while" '(' Cond ')' Stmt .
 
     $default  reduce using rule 51 (Stmt)
 
 
-State 154
+State 158
 
    50 Stmt: "if" '(' Cond ')' Stmt "else" . Stmt
 
-    "if"        shift, and go to state 121
-    "while"     shift, and go to state 122
-    "break"     shift, and go to state 123
-    "continue"  shift, and go to state 124
-    "return"    shift, and go to state 125
+    "if"        shift, and go to state 124
+    "while"     shift, and go to state 125
+    "break"     shift, and go to state 126
+    "continue"  shift, and go to state 127
+    "return"    shift, and go to state 128
     IDENT       shift, and go to state 28
     NUMBER      shift, and go to state 29
     '+'         shift, and go to state 30
     '-'         shift, and go to state 31
-    ';'         shift, and go to state 126
+    ';'         shift, and go to state 129
     '{'         shift, and go to state 101
     '('         shift, and go to state 32
     '!'         shift, and go to state 33
 
-    Block  go to state 130
-    Stmt   go to state 155
-    LVal   go to state 133
-    Exp    go to state 134
+    Block  go to state 133
+    Stmt   go to state 159
+    LVal   go to state 136
+    Exp    go to state 137
 
 
-State 155
+State 159
 
    50 Stmt: "if" '(' Cond ')' Stmt "else" Stmt .
 

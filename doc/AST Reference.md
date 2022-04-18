@@ -62,8 +62,8 @@ class ASTNode : public IdentTable {
     ASTManager &src;
     SourceRange range;
 
-    bool has_loc;
-    ASTLocation loc;
+    bool has_location;
+    ASTLocation location;
     bool has_parent;
     ASTLocation parent;
 }
@@ -75,7 +75,7 @@ class ASTNode : public IdentTable {
 
 ```c++
 class TranslationUnit final : public ASTNode {
-    std::vector<ASTLocation> decl_list;
+    std::vector<ASTLocation> decl_list;		// Decl
 }
 ```
 
@@ -108,7 +108,7 @@ class VarDecl final : public Decl {
 ```c++
 class ParamVarDecl final : public Decl {
     bool is_ptr;
-    std::vector<ASTLocation> arr_dim_list;	
+    std::vector<ASTLocation> arr_dim_list;	// Expr
 }
 ```
 
@@ -142,7 +142,7 @@ class CompoundStmt final : public Stmt {
 
 ```c++
 class DeclStmt final : public Stmt {
-    ASTLocation decl;		// VarDecl
+    std::vector<ASTLocation> decl_list;		// VarDecl
 }
 ```
 
@@ -188,6 +188,7 @@ class BreakStmt final : public Stmt {}
 
 ```c++
 class ReturnStmt final : public Stmt {
+    bool has_expr;
     ASTLocation expr;		// Expr
 }
 ```
@@ -204,7 +205,9 @@ class Expr : public Stmt {
 ##### IntegerLiteral
 
 ```c++
-class IntegerLiteral final : public Expr {}
+class IntegerLiteral final : public Expr {
+    bool is_filler;
+}
 ```
 
 ##### ParenExpr
@@ -265,6 +268,9 @@ class UnaryOperator final : public Expr {
 ```c++
 class InitListExpr final : public Expr {
     std::vector<ASTLocation> init_list;		// Expr
+    
+    std::vector<int> format;
+     bool is_filler;
 }
 ```
 
