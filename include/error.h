@@ -59,11 +59,16 @@ class WrongInitListFormatException : public std::runtime_error {
     const std::string dump;
 };
 
-class NotConstExprException : public std::runtime_error {
+class InvalidValueTypeException : public std::runtime_error {
   public:
-    const std::string expr;
-    explicit NotConstExprException(const std::string &expr)
-        : std::runtime_error('\n' + expr), expr(expr) {}
+    const std::string actual;
+    const std::string need;
+
+    explicit InvalidValueTypeException(const std::string &actual,
+                                       const std::string &need)
+        : std::runtime_error("actual: '" + actual + "', need '" + need + '\'')
+        , actual(actual)
+        , need(need) {}
 };
 
 #endif

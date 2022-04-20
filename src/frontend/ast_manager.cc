@@ -1,6 +1,7 @@
 #include "frontend/ast_manager.h"
 
 #include <sstream>
+#include <vector>
 
 #include "error.h"
 #include "util.h"
@@ -923,6 +924,27 @@ int InitListExpr::GetInitValue(const ASTManager &src,
                         target.GetInitAt(src.GetExpr(index.front()).GetValue())
                             .Cast<InitListExpr>(),
                         {index.begin() + 1, index.end()});
+}
+
+std::vector<int> InitListExpr::GetInitMap() const {
+    if (is_filler) {
+        int size = 1;
+        for (auto dim : format) size *= dim;
+        return {std::vector<int>(size, 0)};
+    }
+
+    std::vector<int> map;
+    if (format.size() == 1) {
+        for (auto expr : init_list) {
+            map.emplace_back(src.GetExpr(expr).GetValue());
+        }
+    } else {
+        for (auto expr : init_list) {
+            auto sub_map = src.GetNode(expr).Cast<InitListExpr>().GetInitMap();
+            map.insert(map.cend(), sub_map.cbegin(), sub_map.cend());
+        }
+    }
+    return map;
 }
 
 std::string InitListExpr::TypeStr() const {

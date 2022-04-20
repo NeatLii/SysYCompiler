@@ -36,3 +36,17 @@ target_link_libraries(parser_tool
     parser
     util
 )
+
+# ast_to_ir
+add_library(ast_to_ir SHARED ast_to_ir.cc)
+target_link_libraries(ast_to_ir ir)
+
+# ast_to_ir tool
+add_executable(ast_to_ir_tool
+    ast_to_ir_tool.cc
+)
+target_link_libraries(ast_to_ir_tool
+    parser
+    ast_to_ir
+    util
+)

@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "frontend/source_manager.h"
 
@@ -939,6 +940,8 @@ class InitListExpr final : public Expr {
     static int GetInitValue(const ASTManager &src,
                             const InitListExpr &target,
                             const std::vector<ASTLocation> &index);
+
+    std::vector<int> GetInitMap() const;
 
     void SetFormat(const std::vector<int> &format) { this->format = format; }
     const std::vector<int> &GetFormat() const { return format; }

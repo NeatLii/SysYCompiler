@@ -373,7 +373,7 @@ There must be no non-phi instructions between the start of a basic block and the
 Syntax:
 
 ```
-<result> = phi <ty> [ <val0>, <label0>], ...
+<result> = phi <ty> [<val0>, <label0>], ...
 ```
 
 #### `call` Instruction

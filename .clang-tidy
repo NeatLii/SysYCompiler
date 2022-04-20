@@ -10,3 +10,7 @@ CheckOptions:
     value:  '1'
   - key:    bugprone-easily-swappable-parameters.MinimumLength
     value:  '4'
+  - key:    readability-identifier-length.MinimumVariableNameLength
+    value:  '2'
+  - key:    readability-identifier-length.MinimumParameterNameLength
+    value:  '2'
