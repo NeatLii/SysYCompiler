@@ -48,7 +48,7 @@ std::string ArrayType::Str() const {
     for (auto iter = arr_dim_list.cbegin(); iter != arr_dim_list.cend();
          ++iter) {
         type_str += '[' + std::to_string(*iter) + " x ";
-        if (iter + 1 == arr_dim_list.cend()) type_str += type->Str();
+        if (iter + 1 == arr_dim_list.cend()) type_str += "i32";
     }
     return type_str + std::string(arr_dim_list.size(), ']');
 }

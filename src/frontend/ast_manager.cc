@@ -158,8 +158,14 @@ void TranslationUnit::BuiltIn() {
         src, {}, raw.AddToken("putarray", {}),
         {src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("n", {}))),
          src.AddNode(new ParamVarDecl(src, {}, raw.AddToken("a", {}), true))});
-    auto *starttime = new FunctionDecl(src, {}, raw.AddToken("starttime", {}));
-    auto *stoptime = new FunctionDecl(src, {}, raw.AddToken("stoptime", {}));
+    auto *_sysy_starttime = new FunctionDecl(
+        src, {}, raw.AddToken("_sysy_starttime", {}),
+        std::vector<ASTLocation>{src.AddNode(
+            new ParamVarDecl(src, {}, raw.AddToken("lineno", {})))});
+    auto *_sysy_stoptime = new FunctionDecl(
+        src, {}, raw.AddToken("_sysy_stoptime", {}),
+        std::vector<ASTLocation>{src.AddNode(
+            new ParamVarDecl(src, {}, raw.AddToken("lineno", {})))});
 
     getint->SetType(Decl::kInt);
     getch->SetType(Decl::kInt);
@@ -167,16 +173,16 @@ void TranslationUnit::BuiltIn() {
     putint->SetType(Decl::kVoid);
     putch->SetType(Decl::kVoid);
     putarray->SetType(Decl::kVoid);
-    starttime->SetType(Decl::kVoid);
-    stoptime->SetType(Decl::kVoid);
+    _sysy_starttime->SetType(Decl::kVoid);
+    _sysy_stoptime->SetType(Decl::kVoid);
     AddDecl(src.AddNode(getint));
     AddDecl(src.AddNode(getch));
     AddDecl(src.AddNode(getarray));
     AddDecl(src.AddNode(putint));
     AddDecl(src.AddNode(putch));
     AddDecl(src.AddNode(putarray));
-    AddDecl(src.AddNode(starttime));
-    AddDecl(src.AddNode(stoptime));
+    AddDecl(src.AddNode(_sysy_starttime));
+    AddDecl(src.AddNode(_sysy_stoptime));
 }
 
 /* class Decl */
@@ -861,7 +867,10 @@ void BinaryOperator::CalculateValue() {
 
 void UnaryOperator::Link() { src.GetNode(sub_expr).SetParent(location); }
 
-void UnaryOperator::Visit() { src.GetNode(sub_expr).Visit(); }
+void UnaryOperator::Visit() {
+    src.GetNode(sub_expr).Visit();
+    CalculateValue();
+}
 
 void UnaryOperator::Dump(std::ostream &ostream,
                          const std::string &indent,
@@ -941,6 +950,27 @@ std::vector<int> InitListExpr::GetInitMap() const {
     } else {
         for (auto expr : init_list) {
             auto sub_map = src.GetNode(expr).Cast<InitListExpr>().GetInitMap();
+            map.insert(map.cend(), sub_map.cbegin(), sub_map.cend());
+        }
+    }
+    return map;
+}
+std::vector<std::pair<bool, ASTLocation>> InitListExpr::GetInitMapExpr() const {
+    if (is_filler) {
+        int size = 1;
+        for (auto dim : format) size *= dim;
+        std::vector<std::pair<bool, ASTLocation>> result;
+        while (size-- != 0) result.emplace_back(false, 0);
+        return result;
+    }
+
+    std::vector<std::pair<bool, ASTLocation>> map;
+    if (format.size() == 1) {
+        for (auto expr : init_list) { map.emplace_back(true, expr); }
+    } else {
+        for (auto expr : init_list) {
+            auto sub_map
+                = src.GetNode(expr).Cast<InitListExpr>().GetInitMapExpr();
             map.insert(map.cend(), sub_map.cbegin(), sub_map.cend());
         }
     }

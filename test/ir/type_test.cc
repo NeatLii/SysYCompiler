@@ -10,8 +10,9 @@ TEST(TypeTest, VoidType) {
 }
 
 TEST(TypeTest, FuncType) {
-    FuncType func(new VoidType, {new IntType(ir::IntType::kI1),
-                                 new IntType(ir::IntType::kI32)});
+    std::vector<Type *> param_list{new IntType(ir::IntType::kI1),
+                                   new IntType(ir::IntType::kI32)};
+    FuncType func(new VoidType, param_list);
     EXPECT_STREQ("void (i1, i32)", func.Str().c_str());
 }
 
@@ -33,6 +34,6 @@ TEST(TypeTest, LabelType) {
 }
 
 TEST(TypeTest, ArrayType) {
-    ArrayType array(new PtrType(new IntType(ir::IntType::kI32)), {4, 2, 1});
-    EXPECT_STREQ("[4 x [2 x [1 x i32*]]]", array.Str().c_str());
+    ArrayType array({4, 2, 1});
+    EXPECT_STREQ("[4 x [2 x [1 x i32]]]", array.Str().c_str());
 }

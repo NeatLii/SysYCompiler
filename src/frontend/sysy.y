@@ -255,7 +255,20 @@ Exp: '(' Exp ')'        { $$ = ast_manager.AddNode(new ast::ParenExpr(ast_manage
     | Exp '*' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kMul, $1, $3)); }
     | Exp '/' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kDiv, $1, $3)); }
     | Exp '%' Exp       { $$ = ast_manager.AddNode(new ast::BinaryOperator(ast_manager, @$, ast::BinaryOperator::kRem, $1, $3)); }
-    | IDENT '(' FuncRParamList ')' %prec CALL   { $$ = ast_manager.AddNode(new ast::CallExpr(ast_manager, @$, $1, *$3)); }
+    | IDENT '(' FuncRParamList ')' %prec CALL   {
+                                                    ast::TokenLocation loc = $1;
+                                                    if(src_manager.GetTokenText($1) == "starttime"){
+                                                        loc = src_manager.AddToken("_sysy_starttime", @1);
+                                                        int lineno = @1.begin_line;
+                                                        (*$3).emplace_back(ast_manager.AddNode(new ast::IntegerLiteral(ast_manager, @3, lineno)));
+                                                    }
+                                                    if(src_manager.GetTokenText($1) == "stoptime"){
+                                                        loc = src_manager.AddToken("_sysy_stoptime", @1);
+                                                        int lineno = @1.begin_line;
+                                                        (*$3).emplace_back(ast_manager.AddNode(new ast::IntegerLiteral(ast_manager, @3, lineno)));
+                                                    }
+                                                    $$ = ast_manager.AddNode(new ast::CallExpr(ast_manager, @$, loc, *$3));
+                                                }
     | '+' Exp %prec PLUS    { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kPlus, $2)); }
     | '-' Exp %prec MINUS   { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kMinus, $2)); }
     | '!' Exp %prec NOT     { $$ = ast_manager.AddNode(new ast::UnaryOperator(ast_manager, @$, ast::UnaryOperator::kNot, $2)); }

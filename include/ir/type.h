@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ir {
@@ -49,17 +50,19 @@ class VoidType final : public Type {
 class FuncType final : public Type {
   public:
     FuncType(Type *ret_type, const std::vector<Type *> &param_list);
+    FuncType(Type *ret_type, std::vector<std::shared_ptr<Type>> param_list)
+        : Type(kFunc), ret_type(ret_type), param_list(std::move(param_list)) {}
 
     const Type &GetRetType() const { return *ret_type; }
 
-    const std::vector<std::unique_ptr<Type>> &GetParamList() const {
+    const std::vector<std::shared_ptr<Type>> &GetParamList() const {
         return param_list;
     }
-    std::vector<std::unique_ptr<Type>>::size_type GetParamNum() const {
+    std::vector<std::shared_ptr<Type>>::size_type GetParamNum() const {
         return param_list.size();
     }
     const Type &GetParamAt(
-        const std::vector<std::unique_ptr<Type>>::size_type index) const {
+        const std::vector<std::shared_ptr<Type>>::size_type index) const {
         return *param_list[index];
     }
 
@@ -70,7 +73,7 @@ class FuncType final : public Type {
 
   private:
     const std::unique_ptr<Type> ret_type;
-    std::vector<std::unique_ptr<Type>> param_list;
+    std::vector<std::shared_ptr<Type>> param_list;
 };
 
 class IntType final : public Type {
@@ -89,14 +92,17 @@ class IntType final : public Type {
 
 class PtrType final : public Type {
   public:
+    PtrType() : Type(kPtr), pointee(new IntType(IntType::kI32)) {}
     explicit PtrType(Type *pointee) : Type(kPtr), pointee(pointee) {}
+    explicit PtrType(std::shared_ptr<Type> pointee)
+        : Type(kPtr), pointee(std::move(pointee)) {}
 
     const Type &GetPointee() const { return *pointee; }
 
     std::string Str() const override { return pointee->Str() + '*'; }
 
   private:
-    const std::unique_ptr<Type> pointee;
+    const std::shared_ptr<Type> pointee;
 };
 
 class LabelType final : public Type {
@@ -108,8 +114,8 @@ class LabelType final : public Type {
 
 class ArrayType final : public Type {
   public:
-    ArrayType(Type *type, std::vector<int> arr_dim_list)
-        : Type(kArray), type(type), arr_dim_list(std::move(arr_dim_list)) {}
+    explicit ArrayType(std::vector<int> arr_dim_list)
+        : Type(kArray), arr_dim_list(std::move(arr_dim_list)) {}
 
     const std::vector<int> &GetArrDimList() const { return arr_dim_list; }
     std::vector<int>::size_type GetArrDimNum() const {
@@ -119,12 +125,9 @@ class ArrayType final : public Type {
         return arr_dim_list[index];
     }
 
-    const Type &GetType() const { return *type; }
-
     std::string Str() const override;
 
   private:
-    const std::unique_ptr<Type> type;
     const std::vector<int> arr_dim_list;
 };
 

@@ -1,6 +1,7 @@
 #ifndef __sysycompiler_ir_ir_h__
 #define __sysycompiler_ir_ir_h__
 
+#include <iostream>
 #include <list>
 #include <memory>
 #include <ostream>
@@ -25,6 +26,7 @@ class LoadInst;
 class StoreInst;
 class GetelementptrInst;
 class ZextInst;
+class BitcastInst;
 class IcmpInst;
 class PhiInst;
 class CallInst;
@@ -44,13 +46,14 @@ class Inst {
     enum InstKind {
         kRet,
         kBr,
-        kArithmeticOp,
-        kLogicOp,
+        kBinaryOp,
+        kBitwiseOp,
         kAlloca,
         kLoad,
         kStore,
         kGetelementptr,
         kZext,
+        kBitcast,
         kIcmp,
         kPhi,
         kCall
@@ -155,11 +158,22 @@ class BinaryOpInst final : public Inst {
                  Var *result,
                  Value *lhs,
                  Value *rhs)
-        : Inst(kArithmeticOp)
+        : Inst(kBinaryOp)
         , op_code(op_code)
         , result(result)
         , lhs(lhs)
         , rhs(rhs) {
+        Check();
+    }
+    BinaryOpInst(const BinaryOpKind op_code,
+                 std::shared_ptr<Var> result,
+                 std::shared_ptr<Value> lhs,
+                 std::shared_ptr<Value> rhs)
+        : Inst(kBinaryOp)
+        , op_code(op_code)
+        , result(std::move(result))
+        , lhs(std::move(lhs))
+        , rhs(std::move(rhs)) {
         Check();
     }
 
@@ -193,31 +207,48 @@ class BitwiseOpInst final : public Inst {
     enum BitwiseOpKind { kAnd, kOr };
     const BitwiseOpKind op_code;
 
-    BitwiseOpInst(const BitwiseOpKind op_code, Var *result, Var *lhs, Var *rhs)
-        : Inst(kLogicOp), op_code(op_code), result(result), lhs(lhs), rhs(rhs) {
+    BitwiseOpInst(const BitwiseOpKind op_code,
+                  Var *result,
+                  Value *lhs,
+                  Value *rhs)
+        : Inst(kBitwiseOp)
+        , op_code(op_code)
+        , result(result)
+        , lhs(lhs)
+        , rhs(rhs) {
         Check();
     }
-
+    BitwiseOpInst(const BitwiseOpKind op_code,
+                  std::shared_ptr<Var> result,
+                  std::shared_ptr<Value> lhs,
+                  std::shared_ptr<Value> rhs)
+        : Inst(kBitwiseOp)
+        , op_code(op_code)
+        , result(std::move(result))
+        , lhs(std::move(lhs))
+        , rhs(std::move(rhs)) {
+        Check();
+    }
     void SetResult(Var *result) { this->result.reset(result); }
     void SetResult(std::shared_ptr<Var> result) {
         this->result = std::move(result);
     }
     const Var &GetResult() const { return *result; }
 
-    void SetLHS(Var *lhs) { this->lhs.reset(lhs); }
-    void SetLHS(std::shared_ptr<Var> lhs) { this->lhs = std::move(lhs); }
-    const Var &GetLHS() const { return *lhs; }
+    void SetLHS(Value *lhs) { this->lhs.reset(lhs); }
+    void SetLHS(std::shared_ptr<Value> lhs) { this->lhs = std::move(lhs); }
+    const Value &GetLHS() const { return *lhs; }
 
-    void SetRHS(Var *rhs) { this->rhs.reset(rhs); }
-    void SetRHS(std::shared_ptr<Var> rhs) { this->rhs = std::move(rhs); }
-    const Var &GetRHS() const { return *rhs; }
+    void SetRHS(Value *rhs) { this->rhs.reset(rhs); }
+    void SetRHS(std::shared_ptr<Value> rhs) { this->rhs = std::move(rhs); }
+    const Value &GetRHS() const { return *rhs; }
 
     std::string Str() const override;
 
   private:
     std::shared_ptr<Var> result;  // i1
-    std::shared_ptr<Var> lhs;     // i1
-    std::shared_ptr<Var> rhs;     // i1
+    std::shared_ptr<Value> lhs;   // i1
+    std::shared_ptr<Value> rhs;   // i1
 
     void Check() const override;
 };
@@ -226,6 +257,10 @@ class BitwiseOpInst final : public Inst {
 class AllocaInst final : public Inst {
   public:
     explicit AllocaInst(Var *result) : Inst(kAlloca), result(result) {
+        Check();
+    }
+    explicit AllocaInst(std::shared_ptr<Var> result)
+        : Inst(kAlloca), result(std::move(result)) {
         Check();
     }
 
@@ -247,6 +282,10 @@ class AllocaInst final : public Inst {
 class LoadInst final : public Inst {
   public:
     LoadInst(Var *result, Var *ptr) : Inst(kLoad), result(result), ptr(ptr) {
+        Check();
+    }
+    LoadInst(std::shared_ptr<Var> result, std::shared_ptr<Var> ptr)
+        : Inst(kLoad), result(std::move(result)), ptr(std::move(ptr)) {
         Check();
     }
 
@@ -275,6 +314,10 @@ class StoreInst final : public Inst {
     StoreInst(Value *result, Var *ptr) : Inst(kStore), value(result), ptr(ptr) {
         Check();
     }
+    StoreInst(std::shared_ptr<Value> result, std::shared_ptr<Var> ptr)
+        : Inst(kStore), value(std::move(result)), ptr(std::move(ptr)) {
+        Check();
+    }
 
     void SetValue(Value *value) { this->value.reset(value); }
     void SetValue(std::shared_ptr<Value> value) {
@@ -298,10 +341,21 @@ class StoreInst final : public Inst {
 // <result> = getelementptr <ty>, <ty>* <ptrval>{, <ty> <idx>}*
 class GetelementptrInst final : public Inst {
   public:
-    GetelementptrInst(Var *result, Var *ptr, std::vector<int> idx_list)
+    GetelementptrInst(Var *result,
+                      Var *ptr,
+                      std::vector<std::shared_ptr<Value>> idx_list)
         : Inst(kGetelementptr)
         , result(result)
         , ptr(ptr)
+        , idx_list(std::move(idx_list)) {
+        Check();
+    }
+    GetelementptrInst(std::shared_ptr<Var> result,
+                      std::shared_ptr<Var> ptr,
+                      std::vector<std::shared_ptr<Value>> idx_list)
+        : Inst(kGetelementptr)
+        , result(std::move(result))
+        , ptr(std::move(ptr))
         , idx_list(std::move(idx_list)) {
         Check();
     }
@@ -316,18 +370,23 @@ class GetelementptrInst final : public Inst {
     void SetPtr(std::shared_ptr<Var> ptr) { this->ptr = std::move(ptr); }
     const Var &GetPtr() const { return *ptr; }
 
-    const std::vector<int> &GetIdxList() const { return idx_list; }
-    std::vector<int>::size_type GetIdxNum() const { return idx_list.size(); }
-    int GetIdxAt(const std::vector<int>::size_type index) const {
+    const std::vector<std::shared_ptr<Value>> &GetIdxList() const {
+        return idx_list;
+    }
+    std::vector<std::shared_ptr<Value>>::size_type GetIdxNum() const {
+        return idx_list.size();
+    }
+    const std::shared_ptr<Value> &GetIdxAt(
+        const std::vector<int>::size_type index) const {
         return idx_list[index];
     }
 
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Var> result;  // i32
+    std::shared_ptr<Var> result;  // ptr
     std::shared_ptr<Var> ptr;     // ptr
-    const std::vector<int> idx_list;
+    const std::vector<std::shared_ptr<Value>> idx_list;
 
     void Check() const override;
 };
@@ -361,6 +420,35 @@ class ZextInst final : public Inst {
     void Check() const override;
 };
 
+// <result> = bitcast <ty> <value> to <ty2>
+class BitcastInst final : public Inst {
+  public:
+    BitcastInst(Var *result, Var *value)
+        : Inst(kBitcast), result(result), value(value) {}
+    BitcastInst(std::shared_ptr<Var> result, std::shared_ptr<Var> value)
+        : Inst(kBitcast), result(std::move(result)), value(std::move(value)) {}
+
+    void SetResult(Var *result) { this->result.reset(result); }
+    void SetResult(std::shared_ptr<Var> result) {
+        this->result = std::move(result);
+    }
+    const Var &GetResult() const { return *result; }
+
+    void SetValue(Var *value) { this->value.reset(value); }
+    void SetValue(std::shared_ptr<Var> value) {
+        this->value = std::move(value);
+    }
+    const Var &GetValue() const { return *value; }
+
+    std::string Str() const override;
+
+  private:
+    std::shared_ptr<Var> result;
+    std::shared_ptr<Var> value;
+
+    void Check() const override {}
+};
+
 // <result> = icmp <cond> <ty> <op1>, <op2>
 class IcmpInst final : public Inst {
   public:
@@ -368,11 +456,18 @@ class IcmpInst final : public Inst {
     const CmpKind op_code;
 
     IcmpInst(const CmpKind op_code, Var *result, Value *lhs, Value *rhs)
-        : Inst(kArithmeticOp)
+        : Inst(kIcmp), op_code(op_code), result(result), lhs(lhs), rhs(rhs) {
+        Check();
+    }
+    IcmpInst(const CmpKind op_code,
+             std::shared_ptr<Var> result,
+             std::shared_ptr<Value> lhs,
+             std::shared_ptr<Value> rhs)
+        : Inst(kIcmp)
         , op_code(op_code)
-        , result(result)
-        , lhs(lhs)
-        , rhs(rhs) {
+        , result(std::move(result))
+        , lhs(std::move(lhs))
+        , rhs(std::move(rhs)) {
         Check();
     }
 
@@ -394,8 +489,8 @@ class IcmpInst final : public Inst {
 
   private:
     std::shared_ptr<Var> result;  // i1
-    std::shared_ptr<Value> lhs;   // i32
-    std::shared_ptr<Value> rhs;   // i32
+    std::shared_ptr<Value> lhs;
+    std::shared_ptr<Value> rhs;
 
     void Check() const override;
 };
@@ -453,27 +548,50 @@ class PhiInst final : public Inst {
 // <result> = call <ty> <fnptrval>(<function args>)
 class CallInst final : public Inst {
   public:
-    CallInst(Value *result,
-             GlobalVar *func,
+    CallInst(Var *result,
+             Var *func,
              std::vector<std::shared_ptr<Value>> param_list)
         : Inst(kCall)
+        , has_ret(true)
         , result(result)
         , func(func)
         , param_list(std::move(param_list)) {
         Check();
     }
+    CallInst(std::shared_ptr<Var> result,
+             std::shared_ptr<Var> func,
+             std::vector<std::shared_ptr<Value>> param_list)
+        : Inst(kCall)
+        , has_ret(true)
+        , result(std::move(result))
+        , func(std::move(func))
+        , param_list(std::move(param_list)) {
+        Check();
+    }
+    CallInst(std::shared_ptr<Var> func,
+             std::vector<std::shared_ptr<Value>> param_list)
+        : Inst(kCall)
+        , has_ret(false)
+        , func(std::move(func))
+        , param_list(std::move(param_list)) {
+        Check();
+    }
 
-    void SetResult(Value *result) { this->result.reset(result); }
-    void SetResult(std::shared_ptr<Value> result) {
+    bool HasRet() const { return has_ret; }
+
+    void SetResult(Var *result) {
+        has_ret = true;
+        this->result.reset(result);
+    }
+    void SetResult(std::shared_ptr<Var> result) {
+        has_ret = true;
         this->result = std::move(result);
     }
-    const Value &GetResult() const { return *result; }
+    const Var &GetResult() const { return *result; }
 
-    void SetFunc(GlobalVar *func) { this->func.reset(func); }
-    void SetFunc(std::shared_ptr<GlobalVar> func) {
-        this->func = std::move(func);
-    }
-    const GlobalVar &GetFunc() const { return *func; }
+    void SetFunc(Var *func) { this->func.reset(func); }
+    void SetFunc(std::shared_ptr<Var> func) { this->func = std::move(func); }
+    const Var &GetFunc() const { return *func; }
 
     const std::vector<std::shared_ptr<Value>> &GetParamList() const {
         return param_list;
@@ -489,8 +607,9 @@ class CallInst final : public Inst {
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Value> result;    // i32
-    std::shared_ptr<GlobalVar> func;  // func
+    bool has_ret;
+    std::shared_ptr<Var> result;  // i32
+    std::shared_ptr<Var> func;    // func
     std::vector<std::shared_ptr<Value>> param_list;
 
     void Check() const override;
@@ -498,7 +617,7 @@ class CallInst final : public Inst {
 
 class BasicBlock {
   public:
-    explicit BasicBlock(Value *label) : label(label) {
+    explicit BasicBlock(Var *label) : label(label) {
         Inst::CheckType(this->label, Type::kLabel);
     }
 
@@ -529,11 +648,11 @@ class BasicBlock {
         return successor_list.size();
     }
 
-    void SetLabel(Value *label) { this->label.reset(label); }
-    void SetLabel(std::shared_ptr<Value> label) {
+    void SetLabel(Var *label) { this->label.reset(label); }
+    void SetLabel(std::shared_ptr<Var> label) {
         this->label = std::move(label);
     }
-    const Value &GetLabel() const { return *label; }
+    const Var &GetLabel() const { return *label; }
 
     void AddInst(Inst *inst) { inst_list.emplace_back(inst); }
     void AddInst(std::shared_ptr<Inst> inst) { inst_list.emplace_back(inst); }
@@ -547,7 +666,7 @@ class BasicBlock {
   private:
     std::list<std::shared_ptr<BasicBlock>> predecessor_list;
     std::list<std::shared_ptr<BasicBlock>> successor_list;
-    std::shared_ptr<Value> label;
+    std::shared_ptr<Var> label;
     std::list<std::shared_ptr<Inst>> inst_list;
 };
 
@@ -559,6 +678,14 @@ class GlobalVarDef {
                  std::vector<std::shared_ptr<Imm>> init_list,
                  const bool is_zero_init)
         : ident(ident)
+        , is_const(is_const)
+        , init_list(std::move(init_list))
+        , is_zero_init(is_zero_init) {}
+    GlobalVarDef(std::shared_ptr<Var> ident,
+                 const bool is_const,
+                 std::vector<std::shared_ptr<Imm>> init_list,
+                 const bool is_zero_init)
+        : ident(std::move(ident))
         , is_const(is_const)
         , init_list(std::move(init_list))
         , is_zero_init(is_zero_init) {}
@@ -593,6 +720,7 @@ class GlobalVarDef {
 class FuncDecl {
   public:
     explicit FuncDecl(Var *ident) : ident(ident) {}
+    explicit FuncDecl(std::shared_ptr<Var> ident) : ident(std::move(ident)) {}
 
     void Dump(std::ostream &ostream) const;
 
@@ -603,7 +731,12 @@ class FuncDecl {
 // define <ResultType> @<FunctionName> ([argument list]) { ... }
 class FuncDef {
   public:
-    explicit FuncDef(Var *ident) : ident(ident) {}
+    explicit FuncDef(Var *ident,
+                     std::vector<std::shared_ptr<TmpVar>> param_list)
+        : ident(ident), param_list(std::move(param_list)) {}
+    explicit FuncDef(std::shared_ptr<Var> ident,
+                     std::vector<std::shared_ptr<TmpVar>> param_list)
+        : ident(std::move(ident)), param_list(std::move(param_list)) {}
 
     void AddBlock(BasicBlock *block) { block_list.emplace_back(block); }
     void AddBlock(std::shared_ptr<BasicBlock> block) {
@@ -616,10 +749,15 @@ class FuncDef {
         return block_list.size();
     }
 
+    const std::vector<std::shared_ptr<TmpVar>> &GetParamList() const {
+        return param_list;
+    }
+
     void Dump(std::ostream &ostream) const;
 
   private:
     const std::shared_ptr<Var> ident;  // func
+    const std::vector<std::shared_ptr<TmpVar>> param_list;
     std::list<std::shared_ptr<BasicBlock>> block_list;
 };
 

@@ -17,24 +17,30 @@ void Inst::CheckType(const std::shared_ptr<Value> &value,
         case Type::kVoid:
             need = "void";
             if (value != nullptr && value->GetType().kind == kind) return;
+            break;
         case Type::kFunc:
             need = "func";
             if (value != nullptr && value->GetType().kind == kind) return;
+            break;
         case Type::kInt:
             need = width == IntType::kI1 ? "i1" : "i32";
             if (value != nullptr && value->GetType().kind == kind
                 && value->GetType().Cast<IntType>().GetWidth() == width) {
                 return;
             }
+            break;
         case Type::kPtr:
             need = "ptr";
             if (value != nullptr && value->GetType().kind == kind) return;
+            break;
         case Type::kLabel:
             need = "label";
             if (value != nullptr && value->GetType().kind == kind) return;
+            break;
         case Type::kArray:
             need = "array";
             if (value != nullptr && value->GetType().kind == kind) return;
+            break;
     }
     throw InvalidValueTypeException(value->GetType().Str(), need);
 }
@@ -106,7 +112,8 @@ void BitwiseOpInst::Check() const {
 }
 
 std::string AllocaInst::Str() const {
-    return result->Str() + " = alloca " + result->GetType().Str();
+    return result->Str() + " = alloca "
+           + result->GetType().Cast<PtrType>().GetPointee().Str();
 }
 
 void AllocaInst::Check() const { CheckType(result, Type::kPtr); }
@@ -131,15 +138,15 @@ void StoreInst::Check() const {
 }
 
 std::string GetelementptrInst::Str() const {
-    std::string str
-        = result->Str() + " = getelementptr " + result->GetType().Str();
+    std::string str = result->Str() + " = getelementptr ";
+    str += ptr->GetType().Cast<PtrType>().GetPointee().Str();
     str += ", " + ptr->TypeStr();
-    for (auto idx : idx_list) str += ", i32 " + std::to_string(idx);
+    for (const auto &idx : idx_list) str += ", " + idx->TypeStr();
     return str;
 }
 
 void GetelementptrInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI32);
+    CheckType(result, Type::kPtr);
     CheckType(ptr, Type::kPtr);
 }
 
@@ -150,6 +157,11 @@ std::string ZextInst::Str() const {
 void ZextInst::Check() const {
     CheckType(result, Type::kInt, IntType::kI32);
     CheckType(value, Type::kInt, IntType::kI1);
+}
+
+std::string BitcastInst::Str() const {
+    return result->Str() + " = bitcast " + value->TypeStr() + " to "
+           + result->GetType().Str();
 }
 
 std::string IcmpInst::Str() const {
@@ -179,8 +191,8 @@ std::string IcmpInst::Str() const {
 
 void IcmpInst::Check() const {
     CheckType(result, Type::kInt, IntType::kI1);
-    CheckType(lhs, Type::kInt, IntType::kI32);
-    CheckType(rhs, Type::kInt, IntType::kI32);
+    // CheckType(lhs, Type::kInt, IntType::kI32);
+    // CheckType(rhs, Type::kInt, IntType::kI32);
 }
 
 std::string PhiInst::PhiValue::Str() const {
@@ -204,22 +216,24 @@ std::string PhiInst::Str() const {
 void PhiInst::Check() const { CheckType(result, Type::kInt, IntType::kI32); }
 
 std::string CallInst::Str() const {
-    std::string str = result->Str() + " = call " + result->GetType().Str();
+    std::string str;
+    if (has_ret) str += result->Str() + " = ";
+    str += "call " + func->GetType().Cast<ir::FuncType>().RetTypeStr();
     str += ' ' + func->Str() + '(';
     for (auto iter = param_list.cbegin(); iter != param_list.cend(); ++iter) {
         if (iter != param_list.cbegin()) str += ", ";
         str += (*iter)->TypeStr();
     }
-    return str;
+    return str + ')';
 }
 
 void CallInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI32);
-    CheckType(result, Type::kFunc);
+    if (result != nullptr) CheckType(result, Type::kInt, IntType::kI32);
+    CheckType(func, Type::kFunc);
 }
 
 void BasicBlock::Dump(std::ostream &ostream, const std::string &indent) const {
-    ostream << label->Str() << ':' << std::endl;
+    ostream << label->GetName() << ':' << std::endl;
     for (const auto &inst : inst_list) {
         ostream << indent << inst->Str() << std::endl;
     }
@@ -250,24 +264,34 @@ void FuncDecl::Dump(std::ostream &ostream) const {
     ostream << "declare";
     ostream << ' ' << ident->GetType().Cast<FuncType>().RetTypeStr();
     ostream << ' ' << ident->Str();
-    ostream << ' ' << ident->GetType().Cast<FuncType>().ParamListStr();
-    ostream << std::endl << std::endl;
+    ostream << ident->GetType().Cast<FuncType>().ParamListStr();
+    ostream << std::endl;
 }
 
 void FuncDef::Dump(std::ostream &ostream) const {
     ostream << "define";
     ostream << ' ' << ident->GetType().Cast<FuncType>().RetTypeStr();
     ostream << ' ' << ident->Str();
-    ostream << ' ' << ident->GetType().Cast<FuncType>().ParamListWithNameStr();
-    ostream << '{' << std::endl;
+    ostream << '(';
+    for (auto iter = param_list.cbegin(); iter != param_list.cend(); ++iter) {
+        if (iter != param_list.cbegin()) ostream << ", ";
+        ostream << (*iter)->TypeStr();
+    }
+    ostream << ") {" << std::endl;
     for (const auto &bb : block_list) bb->Dump(ostream, "    ");
     ostream << '}' << std::endl << std::endl;
 }
 
 void Module::Dump(std::ostream &ostream) const {
+    ostream << "target triple = \"x86_64-pc-linux-gnu\"" << std::endl
+            << std::endl;
+
     for (const auto &var : var_list) var->Dump(ostream);
-    ostream << std::endl;
+    if (!var_list.empty()) ostream << std::endl;
+
     for (const auto &func : func_decl_list) func->Dump(ostream);
+    if (!func_decl_list.empty()) ostream << std::endl;
+
     for (const auto &func : func_def_list) func->Dump(ostream);
 }
 

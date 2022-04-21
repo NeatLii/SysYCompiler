@@ -19,6 +19,8 @@ int main(int argc, char **argv) {
     src_manager.SetFileName(argv[1]);
     yyin = src;
     int result = yyparse();
+    if (result != 0) return result;
+
     ast_manager.GetRoot().Visit();
 
     auto module = AstToIR();

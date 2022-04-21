@@ -36,7 +36,6 @@ class BreakStmt;
 class ReturnStmt;
 
 class Expr;
-class ConstExpr;
 class IntegerLiteral;
 class ParenExpr;
 class DeclRefExpr;
@@ -131,7 +130,6 @@ class ASTNode : public IdentTable {
         kReturnStmt,
 
         kExpr,
-        kConstExpr,
         kIntegerLiteral,
         kParenExpr,
         kDeclRefExpr,
@@ -942,6 +940,7 @@ class InitListExpr final : public Expr {
                             const std::vector<ASTLocation> &index);
 
     std::vector<int> GetInitMap() const;
+    std::vector<std::pair<bool, ASTLocation>> GetInitMapExpr() const;
 
     void SetFormat(const std::vector<int> &format) { this->format = format; }
     const std::vector<int> &GetFormat() const { return format; }
