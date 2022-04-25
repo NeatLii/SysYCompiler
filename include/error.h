@@ -2,9 +2,18 @@
 #define __sysycompiler_error_h__
 
 #include <stdexcept>
+#include <string>
 
 // The followings are all unhandleable errors, used to throw directly, without
 // catch statement. But still save info fields for future expansion.
+
+class InvalidParameterException : public std::runtime_error {
+  public:
+    const std::string msg;
+
+    explicit InvalidParameterException(const std::string &msg)
+        : std::runtime_error(msg), msg(msg) {}
+};
 
 class InvalidParameterValueException : public std::runtime_error {
   public:
