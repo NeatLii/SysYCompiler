@@ -1,18 +1,13 @@
 #ifndef __sysycompiler_frontend_frontend_h__
 #define __sysycompiler_frontend_frontend_h__
 
-#include <memory>
-
-#include "frontend/ast_manager.h"
-#include "ir/ir.h"
-
-extern FILE *yyin;
-extern int yylex();
-extern int yyparse();
+#include "frontend/parser.h"
 
 extern ast::SourceManager src_manager;
 extern ast::ASTManager ast_manager;
+extern std::shared_ptr<ir::Module> module;
 
-std::shared_ptr<ir::Module> AstToIR();
+int Parse(const char *filename);
+int AstToIR();
 
 #endif

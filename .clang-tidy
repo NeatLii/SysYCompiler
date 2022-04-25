@@ -1,7 +1,7 @@
 # 官方文档：https://clang.llvm.org/extra/clang-tidy/checks/list.html
 # clang-tidy版本：>= 14
 
-Checks: '-*,bugprone-*,cert-*,clang-analyzer-*,google-*,hicpp-*,modernize-*,performance-*,portability-*,readability-*,-modernize-use-trailing-return-type,-modernize-use-nodiscard'
+Checks: '-*,bugprone-*,cert-*,clang-analyzer-*,google-*,hicpp-*,modernize-*,performance-*,portability-*,readability-*,-modernize-use-trailing-return-type,-modernize-use-nodiscard,-readability-magic-numbers'
 
 CheckOptions:
   - key:    readability-braces-around-statements.ShortStatementLines

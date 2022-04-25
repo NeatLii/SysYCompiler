@@ -16,7 +16,8 @@
 #include "ir/value.h"
 #include "util.h"
 
-static auto module = std::make_shared<ir::Module>();
+std::shared_ptr<ir::Module> module = std::make_shared<ir::Module>();
+
 static std::unordered_map<ast::ASTLocation, std::shared_ptr<ir::Var>> node_map;
 
 static std::stack<std::list<std::shared_ptr<ir::BasicBlock>>> break_stack;
@@ -25,7 +26,7 @@ static std::stack<std::list<std::shared_ptr<ir::BasicBlock>>> continue_stack;
 static std::stack<std::list<std::shared_ptr<ir::BasicBlock>>> true_stack;
 static std::stack<std::list<std::shared_ptr<ir::BasicBlock>>> false_stack;
 
-std::shared_ptr<ir::Module> AstToIR() {
+int AstToIR() {
     ast::TranslationUnit &root = ast_manager.GetRoot();
     for (auto decl_loc : root.GetDeclList()) {
         auto &decl = ast_manager.GetDecl(decl_loc);
@@ -35,7 +36,7 @@ std::shared_ptr<ir::Module> AstToIR() {
             frontend::TranslateFunctionDecl(decl.Cast<ast::FunctionDecl>());
         }
     }
-    return module;
+    return 0;
 }
 
 namespace frontend {

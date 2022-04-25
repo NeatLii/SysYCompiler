@@ -1,7 +1,0 @@
-int a = 7;
-
-int func() {
-    int b = a;
-    int a = 1;
-    int c = c;
-}

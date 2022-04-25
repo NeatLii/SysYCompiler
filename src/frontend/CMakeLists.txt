@@ -19,13 +19,14 @@ FLEX_TARGET(SysYLexer
     ${CMAKE_CURRENT_BINARY_DIR}/sysy.lex.cc
 )
 ADD_FLEX_BISON_DEPENDENCY(SysYLexer SysYParser)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
 add_library(parser SHARED
     ${BISON_SysYParser_OUTPUTS}
     ${FLEX_SysYLexer_OUTPUTS}
+    parser.cc
 )
 target_link_libraries(parser ast)
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 # parser tool
 
@@ -37,7 +38,7 @@ target_link_libraries(parser_tool
     util
 )
 
-# ast_to_ir
+# ast_to_ir lib
 add_library(ast_to_ir SHARED ast_to_ir.cc)
 target_link_libraries(ast_to_ir ir)
 
