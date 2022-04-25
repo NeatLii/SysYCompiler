@@ -539,6 +539,8 @@ class IfStmt final : public Stmt {
     const Stmt &GetThen() const { return src.GetStmt(then_stmt); }
     ASTLocation GetThenLoc() const { return then_stmt; }
 
+    bool HasElse() const { return has_else; }
+
     const Stmt &GetElse() const { return src.GetStmt(else_stmt); }
     ASTLocation GetElseLoc() const { return else_stmt; }
 
@@ -745,6 +747,8 @@ class DeclRefExpr final : public Expr {
 
     bool HasRef() const { return has_ref; }
     const Decl &GetRef() const { return src.GetDecl(ref); }
+
+    bool ResultIsArr() const;
 
     std::string TypeStr() const;
 

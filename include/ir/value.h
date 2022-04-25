@@ -55,12 +55,16 @@ class Imm final : public Value {
   public:
     explicit Imm(const int value)
         : Value(kImm, new IntType(IntType::kI32)), value(value) {}
+    explicit Imm(const bool i1)
+        : Value(kImm, new IntType(IntType::kI1)), value(i1 ? 1 : 0) {}
 
     int GetValue() const { return value; }
 
     std::string Str() const override { return std::to_string(value); }
     std::string TypeStr() const override {
-        return "i32 " + std::to_string(value);
+        return (type->Cast<IntType>().GetWidth() == IntType::kI1 ? "i1 "
+                                                                 : "i32 ")
+               + std::to_string(value);
     }
 
   private:

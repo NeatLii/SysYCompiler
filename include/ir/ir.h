@@ -67,14 +67,17 @@ class Inst {
     Inst(Inst &&) = delete;
     Inst &operator=(Inst &&) = delete;
 
+    bool IsTerminateInst() const { return kRet <= kind && kind <= kBr; }
+
     virtual std::string Str() const = 0;
 
     template <typename T>
-    const T &Cast() const {
-        return dynamic_cast<const T &>(*this);
+    T &Cast() {
+        return dynamic_cast<T &>(*this);
     }
 
-    static void CheckType(const std::shared_ptr<Value> &value,
+    static void CheckType(const std::string &inst,
+                          const std::shared_ptr<Value> &value,
                           Type::TypeKind kind,
                           IntType::Width width = IntType::kI32);
 
@@ -87,6 +90,7 @@ class Inst {
 class RetInst final : public Inst {
   public:
     RetInst() : Inst(kRet) {}
+    explicit RetInst(Value *ret) : Inst(kRet), ret(ret) { Check(); }
     explicit RetInst(std::shared_ptr<Value> ret)
         : Inst(kRet), ret(std::move(ret)) {
         Check();
@@ -110,9 +114,27 @@ class RetInst final : public Inst {
 // br i1 <cond>, lable <iftrue>, lable <iffalse>
 class BrInst final : public Inst {
   public:
+    explicit BrInst(Value *cond, int stuff) : Inst(kBr), cond(cond) {}
+    explicit BrInst(std::shared_ptr<Value> cond, int stuff)
+        : Inst(kBr), cond(std::move(cond)) {}
+
     explicit BrInst(Var *dest) : Inst(kBr), if_true(dest) { Check(); }
-    BrInst(Var *cond, Var *if_true, Var *if_false)
+    explicit BrInst(std::shared_ptr<Var> dest)
+        : Inst(kBr), if_true(std::move(dest)) {
+        Check();
+    }
+
+    BrInst(Value *cond, Var *if_true, Var *if_false)
         : Inst(kBr), cond(cond), if_true(if_true), if_false(if_false) {
+        Check();
+    }
+    BrInst(std::shared_ptr<Value> cond,
+           std::shared_ptr<Var> if_true,
+           std::shared_ptr<Var> if_false)
+        : Inst(kBr)
+        , cond(std::move(cond))
+        , if_true(std::move(if_true))
+        , if_false(std::move(if_false)) {
         Check();
     }
 
@@ -122,9 +144,9 @@ class BrInst final : public Inst {
     void SetDest(std::shared_ptr<Var> dest) { SetTrue(std::move(dest)); }
     const Var &GetDest() const { return GetTrue(); }
 
-    void SetCond(Var *cond) { this->cond.reset(cond); }
-    void SetCond(std::shared_ptr<Var> cond) { this->cond = std::move(cond); }
-    const Var &GetCond() const { return *cond; }
+    void SetCond(Value *cond) { this->cond.reset(cond); }
+    void SetCond(std::shared_ptr<Value> cond) { this->cond = std::move(cond); }
+    const Value &GetCond() const { return *cond; }
 
     void SetTrue(Var *if_true) { this->if_true.reset(if_true); }
     void SetTrue(std::shared_ptr<Var> if_true) {
@@ -141,7 +163,7 @@ class BrInst final : public Inst {
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Var> cond;      // i1
+    std::shared_ptr<Value> cond;    // i1
     std::shared_ptr<Var> if_true;   // label
     std::shared_ptr<Var> if_false;  // label
 
@@ -302,8 +324,8 @@ class LoadInst final : public Inst {
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Var> result;  // i32
-    std::shared_ptr<Var> ptr;     // ptr
+    std::shared_ptr<Var> result;
+    std::shared_ptr<Var> ptr;  // ptr
 
     void Check() const override;
 };
@@ -311,10 +333,11 @@ class LoadInst final : public Inst {
 // store <ty> <value>, <ty>* <pointer>
 class StoreInst final : public Inst {
   public:
-    StoreInst(Value *result, Var *ptr) : Inst(kStore), value(result), ptr(ptr) {
+    StoreInst(Value *result, Value *ptr)
+        : Inst(kStore), value(result), ptr(ptr) {
         Check();
     }
-    StoreInst(std::shared_ptr<Value> result, std::shared_ptr<Var> ptr)
+    StoreInst(std::shared_ptr<Value> result, std::shared_ptr<Value> ptr)
         : Inst(kStore), value(std::move(result)), ptr(std::move(ptr)) {
         Check();
     }
@@ -325,15 +348,15 @@ class StoreInst final : public Inst {
     }
     const Value &GetValue() const { return *value; }
 
-    void SetPtr(Var *ptr) { this->ptr.reset(ptr); }
-    void SetPtr(std::shared_ptr<Var> ptr) { this->ptr = std::move(ptr); }
-    const Var &GetPtr() const { return *ptr; }
+    void SetPtr(Value *ptr) { this->ptr.reset(ptr); }
+    void SetPtr(std::shared_ptr<Value> ptr) { this->ptr = std::move(ptr); }
+    const Value &GetPtr() const { return *ptr; }
 
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Value> value;  // i32
-    std::shared_ptr<Var> ptr;      // ptr
+    std::shared_ptr<Value> value;
+    std::shared_ptr<Value> ptr;  // ptr
 
     void Check() const override;
 };
@@ -394,28 +417,32 @@ class GetelementptrInst final : public Inst {
 // <result> = zext <ty> <value> to <ty2>
 class ZextInst final : public Inst {
   public:
-    ZextInst(Var *result, Var *value)
+    ZextInst(Value *result, Value *value)
         : Inst(kZext), result(result), value(value) {
         Check();
     }
+    ZextInst(std::shared_ptr<Value> result, std::shared_ptr<Value> value)
+        : Inst(kZext), result(std::move(result)), value(std::move(value)) {
+        Check();
+    }
 
-    void SetResult(Var *result) { this->result.reset(result); }
-    void SetResult(std::shared_ptr<Var> result) {
+    void SetResult(Value *result) { this->result.reset(result); }
+    void SetResult(std::shared_ptr<Value> result) {
         this->result = std::move(result);
     }
-    const Var &GetResult() const { return *result; }
+    const Value &GetResult() const { return *result; }
 
-    void SetValue(Var *value) { this->value.reset(value); }
-    void SetValue(std::shared_ptr<Var> value) {
+    void SetValue(Value *value) { this->value.reset(value); }
+    void SetValue(std::shared_ptr<Value> value) {
         this->value = std::move(value);
     }
-    const Var &GetValue() const { return *value; }
+    const Value &GetValue() const { return *value; }
 
     std::string Str() const override;
 
   private:
-    std::shared_ptr<Var> result;  // i32
-    std::shared_ptr<Var> value;   // i1
+    std::shared_ptr<Value> result;  // i32
+    std::shared_ptr<Value> value;   // i1
 
     void Check() const override;
 };
@@ -618,7 +645,10 @@ class CallInst final : public Inst {
 class BasicBlock {
   public:
     explicit BasicBlock(Var *label) : label(label) {
-        Inst::CheckType(this->label, Type::kLabel);
+        Inst::CheckType("BasicBlock", this->label, Type::kLabel);
+    }
+    explicit BasicBlock(std::shared_ptr<Var> label) : label(std::move(label)) {
+        Inst::CheckType("BasicBlock", this->label, Type::kLabel);
     }
 
     void AddPredecessor(BasicBlock *predecessor) {

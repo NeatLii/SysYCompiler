@@ -61,12 +61,16 @@ class WrongInitListFormatException : public std::runtime_error {
 
 class InvalidValueTypeException : public std::runtime_error {
   public:
+    const std::string &inst;
     const std::string actual;
     const std::string need;
 
-    explicit InvalidValueTypeException(const std::string &actual,
+    explicit InvalidValueTypeException(const std::string &inst,
+                                       const std::string &actual,
                                        const std::string &need)
-        : std::runtime_error("actual: '" + actual + "', need '" + need + '\'')
+        : std::runtime_error("inst: '" + inst + "', actual: '" + actual
+                             + "', need '" + need + '\'')
+        , inst(inst)
         , actual(actual)
         , need(need) {}
 };

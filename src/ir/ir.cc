@@ -9,9 +9,11 @@
 
 namespace ir {
 
-void Inst::CheckType(const std::shared_ptr<Value> &value,
+void Inst::CheckType(const std::string &inst,
+                     const std::shared_ptr<Value> &value,
                      const Type::TypeKind kind,
                      const IntType::Width width) {
+    if (value == nullptr) return;
     std::string need;
     switch (kind) {
         case Type::kVoid:
@@ -42,7 +44,7 @@ void Inst::CheckType(const std::shared_ptr<Value> &value,
             if (value != nullptr && value->GetType().kind == kind) return;
             break;
     }
-    throw InvalidValueTypeException(value->GetType().Str(), need);
+    throw InvalidValueTypeException(inst, value->GetType().Str(), need);
 }
 
 std::string RetInst::Str() const {
@@ -50,7 +52,9 @@ std::string RetInst::Str() const {
     return "ret void";
 }
 
-void RetInst::Check() const { CheckType(ret, Type::kInt, IntType::kI32); }
+void RetInst::Check() const {
+    CheckType("RetInst", ret, Type::kInt, IntType::kI32);
+}
 
 std::string BrInst::Str() const {
     if (HasDest()) { return "br " + if_true->TypeStr(); }
@@ -59,9 +63,9 @@ std::string BrInst::Str() const {
 }
 
 void BrInst::Check() const {
-    CheckType(cond, Type::kInt, IntType::kI1);
-    CheckType(if_true, Type::kLabel);
-    CheckType(if_false, Type::kLabel);
+    if (cond != nullptr) CheckType("BrInst", cond, Type::kInt, IntType::kI1);
+    CheckType("BrInst", if_true, Type::kLabel);
+    if (if_false != nullptr) CheckType("BrInst", if_false, Type::kLabel);
 }
 
 std::string BinaryOpInst::Str() const {
@@ -87,9 +91,9 @@ std::string BinaryOpInst::Str() const {
 }
 
 void BinaryOpInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI32);
-    CheckType(lhs, Type::kInt, IntType::kI32);
-    CheckType(rhs, Type::kInt, IntType::kI32);
+    CheckType("BinaryOpInst", result, Type::kInt, IntType::kI32);
+    CheckType("BinaryOpInst", lhs, Type::kInt, IntType::kI32);
+    CheckType("BinaryOpInst", rhs, Type::kInt, IntType::kI32);
 }
 
 std::string BitwiseOpInst::Str() const {
@@ -106,9 +110,9 @@ std::string BitwiseOpInst::Str() const {
 }
 
 void BitwiseOpInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI1);
-    CheckType(lhs, Type::kInt, IntType::kI1);
-    CheckType(rhs, Type::kInt, IntType::kI1);
+    CheckType("BitwiseOpInst", result, Type::kInt, IntType::kI1);
+    CheckType("BitwiseOpInst", lhs, Type::kInt, IntType::kI1);
+    CheckType("BitwiseOpInst", rhs, Type::kInt, IntType::kI1);
 }
 
 std::string AllocaInst::Str() const {
@@ -116,7 +120,7 @@ std::string AllocaInst::Str() const {
            + result->GetType().Cast<PtrType>().GetPointee().Str();
 }
 
-void AllocaInst::Check() const { CheckType(result, Type::kPtr); }
+void AllocaInst::Check() const { CheckType("AllocaInst", result, Type::kPtr); }
 
 std::string LoadInst::Str() const {
     return result->Str() + " = load " + result->GetType().Str() + ", "
@@ -124,8 +128,8 @@ std::string LoadInst::Str() const {
 }
 
 void LoadInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI32);
-    CheckType(ptr, Type::kPtr);
+    // CheckType("LoadInst", result, Type::kInt, IntType::kI32);
+    CheckType("LoadInst", ptr, Type::kPtr);
 }
 
 std::string StoreInst::Str() const {
@@ -133,8 +137,8 @@ std::string StoreInst::Str() const {
 }
 
 void StoreInst::Check() const {
-    CheckType(value, Type::kInt, IntType::kI32);
-    CheckType(ptr, Type::kPtr);
+    // CheckType("StoreInst", value, Type::kInt, IntType::kI32);
+    CheckType("StoreInst", ptr, Type::kPtr);
 }
 
 std::string GetelementptrInst::Str() const {
@@ -146,8 +150,8 @@ std::string GetelementptrInst::Str() const {
 }
 
 void GetelementptrInst::Check() const {
-    CheckType(result, Type::kPtr);
-    CheckType(ptr, Type::kPtr);
+    CheckType("GetelementptrInst", result, Type::kPtr);
+    CheckType("GetelementptrInst", ptr, Type::kPtr);
 }
 
 std::string ZextInst::Str() const {
@@ -155,8 +159,8 @@ std::string ZextInst::Str() const {
 }
 
 void ZextInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI32);
-    CheckType(value, Type::kInt, IntType::kI1);
+    CheckType("ZextInst", result, Type::kInt, IntType::kI32);
+    CheckType("ZextInst", value, Type::kInt, IntType::kI1);
 }
 
 std::string BitcastInst::Str() const {
@@ -165,7 +169,7 @@ std::string BitcastInst::Str() const {
 }
 
 std::string IcmpInst::Str() const {
-    std::string str = result->Str() + " = ";
+    std::string str = result->Str() + " = icmp ";
     switch (op_code) {
         case kEQ:
             str += "eq";
@@ -186,11 +190,12 @@ std::string IcmpInst::Str() const {
             str += "sle";
             break;
     }
-    return str + " i1 " + lhs->Str() + ", " + rhs->Str();
+    return str + ' ' + lhs->GetType().Str() + ' ' + lhs->Str() + ", "
+           + rhs->Str();
 }
 
 void IcmpInst::Check() const {
-    CheckType(result, Type::kInt, IntType::kI1);
+    CheckType("IcmpInst", result, Type::kInt, IntType::kI1);
     // CheckType(lhs, Type::kInt, IntType::kI32);
     // CheckType(rhs, Type::kInt, IntType::kI32);
 }
@@ -200,8 +205,8 @@ std::string PhiInst::PhiValue::Str() const {
 }
 
 void PhiInst::PhiValue::Check() const {
-    CheckType(value, Type::kInt, IntType::kI32);
-    CheckType(label, Type::kLabel);
+    CheckType("PhiValue", value, Type::kInt, IntType::kI32);
+    CheckType("PhiValue", label, Type::kLabel);
 }
 
 std::string PhiInst::Str() const {
@@ -213,7 +218,9 @@ std::string PhiInst::Str() const {
     return str;
 }
 
-void PhiInst::Check() const { CheckType(result, Type::kInt, IntType::kI32); }
+void PhiInst::Check() const {
+    CheckType("PhiInst", result, Type::kInt, IntType::kI32);
+}
 
 std::string CallInst::Str() const {
     std::string str;
@@ -228,11 +235,14 @@ std::string CallInst::Str() const {
 }
 
 void CallInst::Check() const {
-    if (result != nullptr) CheckType(result, Type::kInt, IntType::kI32);
-    CheckType(func, Type::kFunc);
+    if (result != nullptr) {
+        CheckType("CallInst", result, Type::kInt, IntType::kI32);
+    }
+    CheckType("CallInst", func, Type::kFunc);
 }
 
 void BasicBlock::Dump(std::ostream &ostream, const std::string &indent) const {
+    if (inst_list.empty()) return;
     ostream << label->GetName() << ':' << std::endl;
     for (const auto &inst : inst_list) {
         ostream << indent << inst->Str() << std::endl;

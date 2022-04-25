@@ -577,6 +577,16 @@ void ParenExpr::Dump(std::ostream &ostream,
 
 /* class DeclRefExpr */
 
+bool DeclRefExpr::ResultIsArr() const {
+    if (GetRef().kind == kVarDecl) {
+        return GetRef().Cast<VarDecl>().GetArrDimList().size()
+               > arr_dim_list.size();
+    }
+    const auto &param_ref = GetRef().Cast<ParamVarDecl>();
+    if (!param_ref.IsPtr()) return false;
+    return 1 + param_ref.GetArrDimList().size() > arr_dim_list.size();
+}
+
 std::string DeclRefExpr::TypeStr() const {
     std::string type_str = "int";
     for (std::vector<ASTLocation>::size_type i = 0; i < arr_dim_list.size();

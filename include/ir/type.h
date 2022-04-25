@@ -98,6 +98,7 @@ class PtrType final : public Type {
         : Type(kPtr), pointee(std::move(pointee)) {}
 
     const Type &GetPointee() const { return *pointee; }
+    std::shared_ptr<Type> GetPointeePtr() const { return pointee; }
 
     std::string Str() const override { return pointee->Str() + '*'; }
 
