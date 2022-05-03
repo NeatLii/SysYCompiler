@@ -721,6 +721,7 @@ class GlobalVarDef {
         , is_zero_init(is_zero_init) {}
 
     const Var &GetIdent() const { return *ident; }
+    const std::string &GetName() const { return ident->GetName(); }
 
     bool IsConst() const { return is_const; }
 
@@ -767,6 +768,9 @@ class FuncDef {
     explicit FuncDef(std::shared_ptr<Var> ident,
                      std::vector<std::shared_ptr<TmpVar>> param_list)
         : ident(std::move(ident)), param_list(std::move(param_list)) {}
+
+    const Var &GetIdent() const { return *ident; }
+    const std::string &GetName() const { return ident->GetName(); }
 
     void AddBlock(BasicBlock *block) { block_list.emplace_back(block); }
     void AddBlock(std::shared_ptr<BasicBlock> block) {

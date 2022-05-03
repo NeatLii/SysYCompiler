@@ -18,8 +18,8 @@ TEST(InstructionTest, Mov) {
     ASSERT_NO_THROW(backend::InsMov(REG(0), IMM16(0xffff)));
     backend::InsMov mov(REG(0), REG(1));
     backend::InsMov mov1(REG(0), IMM32(10));
-    EXPECT_STREQ("\tmov\tr0, r1", mov.Str().c_str());
-    EXPECT_STREQ("\tmov\tr0, #10", mov1.Str().c_str());
+    EXPECT_STREQ("    mov   \tr0, r1", mov.Str().c_str());
+    EXPECT_STREQ("    mov   \tr0, #10", mov1.Str().c_str());
 }
 
 TEST(InstructionTest, Ldr) {
@@ -27,17 +27,17 @@ TEST(InstructionTest, Ldr) {
     backend::InsLdr ldr1(REG(0), REG(1), IMM32(10));
     backend::InsLdr ldr2(REG(0), IMM32(10));
     backend::InsLdr ldr3(REG(0), LABEL("global_var_a"));
-    EXPECT_STREQ("\tldr\tr0, [r1]", ldr.Str().c_str());
-    EXPECT_STREQ("\tldr\tr0, [r1, #10]", ldr1.Str().c_str());
-    EXPECT_STREQ("\tldr\tr0, =#10", ldr2.Str().c_str());
-    EXPECT_STREQ("\tldr\tr0, =global_var_a", ldr3.Str().c_str());
+    EXPECT_STREQ("    ldr   \tr0, [r1]", ldr.Str().c_str());
+    EXPECT_STREQ("    ldr   \tr0, [r1, #10]", ldr1.Str().c_str());
+    EXPECT_STREQ("    ldr   \tr0, =#10", ldr2.Str().c_str());
+    EXPECT_STREQ("    ldr   \tr0, =global_var_a", ldr3.Str().c_str());
 }
 
 TEST(InstructionTest, Str) {
     backend::InsStr str(REG(0), REG(1));
     backend::InsStr str1(REG(0), REG(1), IMM32(10));
-    EXPECT_STREQ("\tstr\tr0, [r1]", str.Str().c_str());
-    EXPECT_STREQ("\tstr\tr0, [r1, #10]", str1.Str().c_str());
+    EXPECT_STREQ("    str   \tr0, [r1]", str.Str().c_str());
+    EXPECT_STREQ("    str   \tr0, [r1, #10]", str1.Str().c_str());
 }
 
 TEST(InstructionTest, Push) {
@@ -47,8 +47,8 @@ TEST(InstructionTest, Push) {
     v.emplace_back(REG(7));
     v.emplace_back(REG(backend::RegOperand::kLr));
     backend::InsPush push1(v);
-    EXPECT_STREQ("\tpush\t{r0}", push.Str().c_str());
-    EXPECT_STREQ("\tpush\t{r0, r7, lr}", push1.Str().c_str());
+    EXPECT_STREQ("    push  \t{r0}", push.Str().c_str());
+    EXPECT_STREQ("    push  \t{r0, r7, lr}", push1.Str().c_str());
 }
 
 TEST(InstructionTest, Pop) {
@@ -58,8 +58,8 @@ TEST(InstructionTest, Pop) {
     v.emplace_back(REG(7));
     v.emplace_back(REG(14));
     backend::InsPop pop1(v);
-    EXPECT_STREQ("\tpop\t{r0}", pop.Str().c_str());
-    EXPECT_STREQ("\tpop\t{r0, r7, lr}", pop1.Str().c_str());
+    EXPECT_STREQ("    pop   \t{r0}", pop.Str().c_str());
+    EXPECT_STREQ("    pop   \t{r0, r7, lr}", pop1.Str().c_str());
 }
 
 TEST(InstructionTest, Cmp) {
@@ -68,8 +68,8 @@ TEST(InstructionTest, Cmp) {
     ASSERT_NO_THROW(backend::InsCmp(REG(0), IMM32(0x0ff00000)));
     backend::InsCmp cmp(REG(0), REG(1));
     backend::InsCmp cmp1(REG(0), IMM32(10));
-    EXPECT_STREQ("\tcmp\tr0, r1", cmp.Str().c_str());
-    EXPECT_STREQ("\tcmp\tr0, #10", cmp1.Str().c_str());
+    EXPECT_STREQ("    cmp   \tr0, r1", cmp.Str().c_str());
+    EXPECT_STREQ("    cmp   \tr0, #10", cmp1.Str().c_str());
 }
 
 TEST(InstructionTest, B) {
@@ -80,23 +80,23 @@ TEST(InstructionTest, B) {
     backend::InsB b4(LABEL("func.true"), backend::InsB::kGE);
     backend::InsB b5(LABEL("func.true"), backend::InsB::kLT);
     backend::InsB b6(LABEL("func.true"), backend::InsB::kLE);
-    EXPECT_STREQ("\tb\tfunc.true", b.Str().c_str());
-    EXPECT_STREQ("\tbeq\tfunc.true", b1.Str().c_str());
-    EXPECT_STREQ("\tbne\tfunc.true", b2.Str().c_str());
-    EXPECT_STREQ("\tbgt\tfunc.true", b3.Str().c_str());
-    EXPECT_STREQ("\tbge\tfunc.true", b4.Str().c_str());
-    EXPECT_STREQ("\tblt\tfunc.true", b5.Str().c_str());
-    EXPECT_STREQ("\tble\tfunc.true", b6.Str().c_str());
+    EXPECT_STREQ("    b     \tfunc.true", b.Str().c_str());
+    EXPECT_STREQ("    beq   \tfunc.true", b1.Str().c_str());
+    EXPECT_STREQ("    bne   \tfunc.true", b2.Str().c_str());
+    EXPECT_STREQ("    bgt   \tfunc.true", b3.Str().c_str());
+    EXPECT_STREQ("    bge   \tfunc.true", b4.Str().c_str());
+    EXPECT_STREQ("    blt   \tfunc.true", b5.Str().c_str());
+    EXPECT_STREQ("    ble   \tfunc.true", b6.Str().c_str());
 }
 
 TEST(InstructionTest, Bl) {
     backend::InsBl bl(LABEL("func"));
-    EXPECT_STREQ("\tbl\tfunc(PLT)", bl.Str().c_str());
+    EXPECT_STREQ("    bl    \tfunc(PLT)", bl.Str().c_str());
 }
 
 TEST(InstructionTest, Bx) {
     backend::InsBx bx(REG(backend::RegOperand::kLr));
-    EXPECT_STREQ("\tbx\tlr", bx.Str().c_str());
+    EXPECT_STREQ("    bx    \tlr", bx.Str().c_str());
 }
 
 TEST(InstructionTest, Add) {
@@ -105,8 +105,8 @@ TEST(InstructionTest, Add) {
     ASSERT_NO_THROW(backend::InsAdd(REG(0), REG(1), IMM32(0x0ff00000)));
     backend::InsAdd add(REG(0), REG(1), REG(2));
     backend::InsAdd add1(REG(0), REG(1), IMM32(10));
-    EXPECT_STREQ("\tadd\tr0, r1, r2", add.Str().c_str());
-    EXPECT_STREQ("\tadd\tr0, r1, #10", add1.Str().c_str());
+    EXPECT_STREQ("    add   \tr0, r1, r2", add.Str().c_str());
+    EXPECT_STREQ("    add   \tr0, r1, #10", add1.Str().c_str());
 }
 
 TEST(InstructionTest, Sub) {
@@ -115,18 +115,18 @@ TEST(InstructionTest, Sub) {
     ASSERT_NO_THROW(backend::InsSub(REG(0), REG(1), IMM32(0x0ff00000)));
     backend::InsSub sub(REG(0), REG(1), REG(2));
     backend::InsSub sub1(REG(0), REG(1), IMM32(10));
-    EXPECT_STREQ("\tsub\tr0, r1, r2", sub.Str().c_str());
-    EXPECT_STREQ("\tsub\tr0, r1, #10", sub1.Str().c_str());
+    EXPECT_STREQ("    sub   \tr0, r1, r2", sub.Str().c_str());
+    EXPECT_STREQ("    sub   \tr0, r1, #10", sub1.Str().c_str());
 }
 
 TEST(InstructionTest, Mul) {
     backend::InsMul mul(REG(0), REG(1), REG(2));
-    EXPECT_STREQ("\tmul\tr0, r1, r2", mul.Str().c_str());
+    EXPECT_STREQ("    mul   \tr0, r1, r2", mul.Str().c_str());
 }
 
 TEST(InstructionTest, SDiv) {
     backend::InsSDiv sdiv(REG(0), REG(1), REG(2));
-    EXPECT_STREQ("\tsdiv\tr0, r1, r2", sdiv.Str().c_str());
+    EXPECT_STREQ("    sdiv  \tr0, r1, r2", sdiv.Str().c_str());
 }
 
 TEST(InstructionTest, And) {
@@ -135,8 +135,8 @@ TEST(InstructionTest, And) {
     ASSERT_NO_THROW(backend::InsAnd(REG(0), REG(1), IMM32(0x0ff00000)));
     backend::InsAnd and_(REG(0), REG(1), REG(2));
     backend::InsAnd and1(REG(0), REG(1), IMM32(10));
-    EXPECT_STREQ("\tand\tr0, r1, r2", and_.Str().c_str());
-    EXPECT_STREQ("\tand\tr0, r1, #10", and1.Str().c_str());
+    EXPECT_STREQ("    and   \tr0, r1, r2", and_.Str().c_str());
+    EXPECT_STREQ("    and   \tr0, r1, #10", and1.Str().c_str());
 }
 
 TEST(InstructionTest, Orr) {
@@ -145,13 +145,13 @@ TEST(InstructionTest, Orr) {
     ASSERT_NO_THROW(backend::InsOrr(REG(0), REG(1), IMM32(0x0ff00000)));
     backend::InsOrr orr(REG(0), REG(1), REG(2));
     backend::InsOrr orr1(REG(0), REG(1), IMM32(10));
-    EXPECT_STREQ("\torr\tr0, r1, r2", orr.Str().c_str());
-    EXPECT_STREQ("\torr\tr0, r1, #10", orr1.Str().c_str());
+    EXPECT_STREQ("    orr   \tr0, r1, r2", orr.Str().c_str());
+    EXPECT_STREQ("    orr   \tr0, r1, #10", orr1.Str().c_str());
 }
 
 TEST(InstructionTest, Nop) {
     backend::InsNop nop;
-    EXPECT_STREQ("\tnop", nop.Str().c_str());
+    EXPECT_STREQ("    nop  ", nop.Str().c_str());
 }
 
 TEST(InstructionTest, Label) {
@@ -171,21 +171,21 @@ class AssemblyTest : public testing::Test {
     void Init_a() {
         backend::GlobalVar var_a("a", std::vector<std::int32_t>{100});
         std::string result_a = "\n"
-                               "\t.global a\n"
-                               "\t.type a, %object\n"
-                               "\t.size a, 4\n"
+                               "    .global a\n"
+                               "    .type a, %object\n"
+                               "    .size a, 4\n"
                                "a:\n"
-                               "\t.word 100\n";
+                               "    .word 100\n";
         vars.emplace_back(var_a, result_a);
     }
     void Init_b() {
         backend::GlobalVar var_b("b", std::vector<std::int32_t>{200});
         std::string result_b = "\n"
-                               "\t.global b\n"
-                               "\t.type b, %object\n"
-                               "\t.size b, 4\n"
+                               "    .global b\n"
+                               "    .type b, %object\n"
+                               "    .size b, 4\n"
                                "b:\n"
-                               "\t.word 200\n";
+                               "    .word 200\n";
         vars.emplace_back(var_b, result_b);
     }
     void Init_func() {
@@ -210,23 +210,23 @@ class AssemblyTest : public testing::Test {
             std::vector<std::shared_ptr<backend::RegOperand>>{
                 REG(backend::RegOperand::kFp), REG(backend::RegOperand::kPc)}));
         std::string result = "\n"
-                             "\t.global func\n"
-                             "\t.type func, %function\n"
+                             "    .global func\n"
+                             "    .type func, %function\n"
                              "func:\n"
-                             "\tpush\t{fp, lr}\n"
-                             "\tmov\tr1, #10\n"
-                             "\tmov\tr2, #20\n"
-                             "\tcmp\tr1, r2\n"
-                             "\tbgt\tfunc.false\n"
-                             "\tmov\tr0, r1\n"
-                             "\tb\tfunc.end\n"
+                             "    push  \t{fp, lr}\n"
+                             "    mov   \tr1, #10\n"
+                             "    mov   \tr2, #20\n"
+                             "    cmp   \tr1, r2\n"
+                             "    bgt   \tfunc.false\n"
+                             "    mov   \tr0, r1\n"
+                             "    b     \tfunc.end\n"
                              "func.false:\n"
-                             "\tmov\tr0, r2\n"
+                             "    mov   \tr0, r2\n"
                              "func.end:\n"
-                             "\tbl\tputint(PLT)\n"
-                             "\tmov\tr0, #10\n"
-                             "\tbl\tputch(PLT)\n"
-                             "\tpop\t{fp, pc}\n";
+                             "    bl    \tputint(PLT)\n"
+                             "    mov   \tr0, #10\n"
+                             "    bl    \tputch(PLT)\n"
+                             "    pop   \t{fp, pc}\n";
         funcs.emplace_back(func, result);
     }
     void Init_main() {
@@ -240,13 +240,13 @@ class AssemblyTest : public testing::Test {
             std::vector<std::shared_ptr<backend::RegOperand>>{
                 REG(backend::RegOperand::kFp), REG(backend::RegOperand::kPc)}));
         std::string result = "\n"
-                             "\t.global main\n"
-                             "\t.type main, %function\n"
+                             "    .global main\n"
+                             "    .type main, %function\n"
                              "main:\n"
-                             "\tpush\t{fp, lr}\n"
-                             "\tbl\tfunc(PLT)\n"
-                             "\tmov\tr0, #0\n"
-                             "\tpop\t{fp, pc}\n";
+                             "    push  \t{fp, lr}\n"
+                             "    bl    \tfunc(PLT)\n"
+                             "    mov   \tr0, #0\n"
+                             "    pop   \t{fp, pc}\n";
         funcs.emplace_back(func, result);
     }
 
@@ -272,13 +272,13 @@ TEST_F(AssemblyTest, FunctionDump) {
 
 TEST_F(AssemblyTest, AssemblyDump) {
     backend::Assembly assembly;
-    std::string result = "\t.arch armv7-a\n";
-    result += "\n\t.data\n";
+    std::string result = "    .arch armv7-a\n";
+    result += "\n    .data\n";
     for (auto &pair : vars) {
         assembly.AddVar(std::make_shared<backend::GlobalVar>(pair.first));
         result += pair.second;
     }
-    result += "\n\t.text\n";
+    result += "\n    .text\n";
     for (auto &pair : funcs) {
         assembly.AddFunc(std::make_shared<backend::Function>(pair.first));
         result += pair.second;

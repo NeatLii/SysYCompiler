@@ -32,6 +32,7 @@ class InsBx;
 
 class InsAdd;
 class InsSub;
+class InsRsb;
 class InsMul;
 class InsSDiv;
 class InsAnd;
@@ -62,8 +63,10 @@ class Inst {
 
         kInsAdd,
         kInsSub,
+        kInsRsb,
         kInsMul,
         kInsSDiv,
+
         kInsAnd,
         kInsOrr,
 
@@ -97,12 +100,12 @@ class Inst {
 };
 
 const std::array<std::string, Inst::kInsLabel + 1> Inst::op_map
-    = {"\tmov",  "\tldr", "\tstr", "\tpush", "\tpop", "\tcmp",
-       "\tb",    "\tbl",  "\tbx",  "\tadd",  "\tsub", "\tmul",
-       "\tsdiv", "\tand", "\torr", "\tnop",  ""};
+    = {"    mov", "    ldr",  "    str", "    push", "    pop", "    cmp",
+       "    b",   "    bl",   "    bx",  "    add",  "    sub", "    rsb",
+       "    mul", "    sdiv", "    and", "    orr",  "    nop", ""};
 
 const std::array<std::string, Inst::kLE + 1> Inst::cond_map
-    = {"", "eq", "ne", "gt", "ge", "lt", "le"};
+    = {"  ", "eq", "ne", "gt", "ge", "lt", "le"};
 
 // mov{cond} Rd, Rm
 // mov{cond} Rd, #<imm16>
@@ -194,6 +197,8 @@ class InsStr final : public Inst {
 // @ curly braces '{' and '}'
 class InsPush final : public Inst {
   public:
+    // push {fp, lr}
+    InsPush();
     explicit InsPush(std::vector<std::shared_ptr<RegOperand>> reg_list,
                      const CondKind cond = kAL)
         : Inst(kInsPush, cond), reg_list(std::move(reg_list)) {}
@@ -201,7 +206,7 @@ class InsPush final : public Inst {
     std::string Str() const override;
 
   private:
-    const std::vector<std::shared_ptr<RegOperand>> reg_list;
+    std::vector<std::shared_ptr<RegOperand>> reg_list;
 };
 
 // pop{cond} <reglist>
@@ -209,6 +214,8 @@ class InsPush final : public Inst {
 // @ curly braces '{' and '}'
 class InsPop final : public Inst {
   public:
+    // pop {fp, lr}
+    InsPop();
     explicit InsPop(std::vector<std::shared_ptr<RegOperand>> reg_list,
                     const CondKind cond = kAL)
         : Inst(kInsPop, cond), reg_list(std::move(reg_list)) {}
@@ -216,7 +223,7 @@ class InsPop final : public Inst {
     std::string Str() const override;
 
   private:
-    const std::vector<std::shared_ptr<RegOperand>> reg_list;
+    std::vector<std::shared_ptr<RegOperand>> reg_list;
 };
 
 // cmp{cond} Rn, Rm
@@ -272,6 +279,8 @@ class InsBl final : public Inst {
 // bx{cond} Rm
 class InsBx final : public Inst {
   public:
+    // bx lr
+    InsBx() : Inst(kInsBx, kAL), Rm(new RegOperand(RegOperand::kLr)) {}
     explicit InsBx(std::shared_ptr<RegOperand> Rm, const CondKind cond = kAL)
         : Inst(kInsBx, cond), Rm(std::move(Rm)) {}
 
@@ -331,6 +340,39 @@ class InsSub final : public Inst {
            const std::shared_ptr<ImmOperand> &imm8m,
            const CondKind cond = kAL)
         : Inst(kInsSub, cond)
+        , Rd(std::move(Rd))
+        , Rn(std::move(Rn))
+        , Rm_imm(imm8m) {
+        CheckImm();
+    }
+
+    std::string Str() const override;
+
+  private:
+    const std::shared_ptr<RegOperand> Rd;
+    const std::shared_ptr<RegOperand> Rn;
+    const std::shared_ptr<Operand> Rm_imm;
+
+    void CheckImm() const;
+};
+
+// rsb{cond} Rd, Rn, Rm
+// rsb{cond} Rd, Rn, #<imm8m>
+class InsRsb final : public Inst {
+  public:
+    InsRsb(std::shared_ptr<RegOperand> Rd,
+           std::shared_ptr<RegOperand> Rn,
+           const std::shared_ptr<RegOperand> &Rm,
+           const CondKind cond = kAL)
+        : Inst(kInsRsb, cond)
+        , Rd(std::move(Rd))
+        , Rn(std::move(Rn))
+        , Rm_imm(Rm) {}
+    InsRsb(std::shared_ptr<RegOperand> Rd,
+           std::shared_ptr<RegOperand> Rn,
+           const std::shared_ptr<ImmOperand> &imm8m,
+           const CondKind cond = kAL)
+        : Inst(kInsRsb, cond)
         , Rd(std::move(Rd))
         , Rn(std::move(Rn))
         , Rm_imm(imm8m) {
@@ -448,7 +490,7 @@ class InsOrr final : public Inst {
 };
 
 // nop{cond}    @ pseudo-instruction
-class InsNop : public Inst {
+class InsNop final : public Inst {
   public:
     explicit InsNop(const CondKind cond = kAL) : Inst(kInsNop, cond) {}
 
@@ -456,8 +498,10 @@ class InsNop : public Inst {
 };
 
 // label:
-class InsLabel : public Inst {
+class InsLabel final : public Inst {
   public:
+    explicit InsLabel(const std::string &label)
+        : Inst(kInsLabel, kAL), label(new LabelOperand(label)) {}
     explicit InsLabel(std::shared_ptr<LabelOperand> label)
         : Inst(kInsLabel, kAL), label(std::move(label)) {}
 
@@ -483,12 +527,9 @@ class GlobalVar {
 
 class Function {
   public:
-    explicit Function(std::string name, const int argc = 0)
-        : name(std::move(name)), argc(argc) {}
+    explicit Function(std::string name) : name(std::move(name)) {}
 
     const std::string &GetName() const { return name; }
-
-    int GetArgc() const { return argc; }
 
     void AddInst(Inst *inst) { inst_list.emplace_back(inst); }
     void AddInst(std::shared_ptr<Inst> inst) { inst_list.emplace_back(inst); }
@@ -498,9 +539,35 @@ class Function {
 
     void Dump(std::ostream &os) const;
 
+    // r0: ret value
+    // r1: binary op result
+    // r2: binary op lhs
+    // r3: binary op rhs
+    // r4: srem, ldr =#
+    // r5: ldr =label
+    // r6: ldr
+    // r7: ldr
+    // r8: str
+    // r9: getelementptr result
+
+    // "": available
+    std::array<std::string, 11> reg_state;
+
+    // <0: in stack
+    // >=0: in reg
+    std::unordered_map<std::string, int> var_state;
+
+    // <var_name, offset>
+    // offset begin from 1
+    std::unordered_map<std::string, unsigned int> stack_state;
+
+    // <ptr_name, offset>
+    std::unordered_map<std::string, unsigned int> ptr_state;
+
+    void GetReg(int id);
+
   private:
     const std::string name;
-    const int argc;
 
     std::list<std::shared_ptr<Inst>> inst_list;
 };
